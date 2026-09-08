@@ -81,6 +81,16 @@ details summary{cursor:pointer;color:var(--muted);font-size:11.5px}
 .item .actions{display:flex;gap:6px;margin-top:8px}
 .item button{padding:6px 10px;font-size:10px}
 .empty{font-size:11px;color:var(--dim);padding:14px 0}
+.pref-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.pref-grid{grid-template-columns:1fr}}
+.pref-card{border:1px solid var(--line);border-radius:8px;padding:14px;background:var(--panel2);display:flex;flex-direction:column;gap:12px}
+.pref-card .label{font:10px ui-monospace,monospace;color:var(--dim);text-transform:uppercase;letter-spacing:1.5px}
+.pref-card .text{font-size:13px;line-height:1.6;color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere;min-height:60px}
+.pref-actions{display:flex;gap:8px;margin-top:16px}
+.pref-tie{text-align:center;margin-top:10px}
+.pref-item{border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--panel2);margin-bottom:8px;font-size:11.5px}
+.pref-item .p{color:var(--ink);font-weight:600;margin-bottom:6px}
+.pref-item .w{color:#8fd19e;font:10px ui-monospace,monospace;text-transform:uppercase;letter-spacing:1px}
 
 .chatlog{display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 420px);min-height:220px;overflow-y:auto;margin-bottom:14px;padding-right:2px}
 .chatlog:empty::after{content:'No messages yet. Ask something below.';font-size:11px;color:var(--dim)}
@@ -107,6 +117,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:11.5px}
 <button data-tab="chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 5h16v11H8l-4 4V5Z"/></svg>Chat</button>
 <button data-tab="data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="12" cy="5" rx="8" ry="2.6"/><path d="M4 5v14c0 1.4 3.6 2.6 8 2.6s8-1.2 8-2.6V5"/><path d="M4 12c0 1.4 3.6 2.6 8 2.6s8-1.2 8-2.6"/></svg>Training data</button>
 <button data-tab="memory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Memory</button>
+<button data-tab="preferences"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v18M12 6l-6 0-3 7a4 4 0 0 0 8 0l-3-7Z"/><path d="M12 6l6 0 3 7a4 4 0 0 1-8 0l3-7Z"/></svg>Preferences</button>
 </nav>
 <div class="sidebar-foot"><span class="dot"></span>M2 local · no cloud inference<br>Byte/BPE Transformer, trained from scratch</div>
 </nav>
@@ -168,6 +179,20 @@ details summary{cursor:pointer;color:var(--muted);font-size:11.5px}
 </div>
 </section>
 
+<section class="view" data-view="preferences">
+<h1>Preferences</h1>
+<p class="lede">Real human-preference data — the raw material RLHF trains on. Pick which response is actually better; nothing here is faked or auto-labeled.</p>
+<div class="panel"><div class="panelhead"><h2>Compare two responses</h2><small id="prefCount">0 collected</small></div>
+<p class="caption" id="prefStatus">Needs a fine-tuned checkpoint to generate comparisons.</p>
+<label for="prefPrompt">Prompt (leave blank for a random one)</label>
+<div class="row"><input id="prefPrompt" placeholder="e.g. What is the opposite of fast?"><button id="prefNew" class="secondary">New comparison</button></div>
+<div id="prefPair" style="margin-top:18px"></div>
+</div>
+<div class="panel"><div class="panelhead"><h2>Recent comparisons</h2><small>LAST 30</small></div>
+<div id="prefList" class="itemlist"><p class="empty">No comparisons yet.</p></div>
+</div>
+</section>
+
 <div id="message" role="status"></div>
 </div>
 </div>
@@ -176,7 +201,7 @@ const $=id=>document.getElementById(id);let state={},busy=false;
 async function api(path,body){let r=await fetch('/api/'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});let d=await r.json();if(!r.ok)throw Error(d.error);return d}
 function canvas(id){let c=$(id),r=c.getBoundingClientRect(),d=devicePixelRatio||1;c.width=r.width*d;c.height=r.height*d;let x=c.getContext('2d');x.scale(d,d);return [x,r.width,r.height]}
 
-const TAB_NAMES={overview:'Overview',train:'Train',chat:'Chat',data:'Training data',memory:'Memory'};
+const TAB_NAMES={overview:'Overview',train:'Train',chat:'Chat',data:'Training data',memory:'Memory',preferences:'Preferences'};
 document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>{
  document.querySelectorAll('nav.tabs button').forEach(x=>x.classList.remove('active'));
  b.classList.add('active');
@@ -199,6 +224,8 @@ async function poll(){try{let r=await fetch('/api/status');state=await r.json();
  $('chatSend').disabled=!chatReady||busy;$('chatInput').disabled=!chatReady;
  $('chatStage').textContent=chatReady?'FINE-TUNED':(state.stage==='finetune'?'TRAINING…':'PRETRAIN ONLY');
  $('chatCaption').textContent=chatReady?'Fine-tuned checkpoint loaded. Conversation history is included in the prompt but this model was never specifically trained on multi-turn context, so long threads may drift.':'Chat needs a fine-tuned checkpoint (instruction/response training), not just pretraining. Run the fine-tuning stage first.';
+ $('prefNew').disabled=!chatReady||busy;
+ $('prefStatus').textContent=chatReady?'Generates two responses to the same prompt at different sampling temperatures — pick the one you\'d actually rather receive.':'Needs a fine-tuned checkpoint to generate comparisons.';
  if(document.querySelector('.view.active[data-view=overview]'))chart()
 }catch(e){$('message').textContent='Cannot reach the local server. Open Start Brain.command to run it.'}}
 async function action(fn){busy=true;$('message').textContent='';await poll();try{await fn()}catch(e){$('message').textContent=e.message}finally{busy=false;await poll()}}
@@ -271,4 +298,41 @@ $('compileSources').onclick=()=>action(async()=>{
  await loadSources();
 });
 loadMemory();loadSources();
+
+let currentPref=null;
+function renderPrefPair(){
+ if(!currentPref){$('prefPair').innerHTML='';return}
+ $('prefPair').innerHTML=`<div class="pref-grid">
+  <div class="pref-card"><span class="label">Response A</span><div class="text">${esc(currentPref.response_a)}</div></div>
+  <div class="pref-card"><span class="label">Response B</span><div class="text">${esc(currentPref.response_b)}</div></div>
+ </div>
+ <div class="pref-actions"><button id="voteA">A is better</button><button id="voteB">B is better</button><button id="voteTie" class="secondary">Tie / both bad</button></div>`;
+ $('voteA').onclick=()=>vote('a');$('voteB').onclick=()=>vote('b');$('voteTie').onclick=()=>vote('tie');
+}
+async function newComparison(){
+ await action(async()=>{
+  $('prefPair').innerHTML='<p class="caption">Generating two responses…</p>';
+  let d=await api('preferences/pair',{prompt:$('prefPrompt').value.trim()});
+  currentPref=d;$('prefPrompt').value='';
+  renderPrefPair();
+ });
+}
+async function vote(winner){
+ await action(async()=>{
+  await api('preferences/vote',{prompt:currentPref.prompt,response_a:currentPref.response_a,response_b:currentPref.response_b,winner});
+  currentPref=null;
+  await loadPreferences();
+  await newComparison();
+ });
+}
+$('prefNew').onclick=newComparison;
+async function loadPreferences(){
+ let d=await (await fetch('/api/preferences')).json();
+ $('prefCount').textContent=`${d.count} collected`;
+ let list=$('prefList');
+ if(!d.records||!d.records.length){list.innerHTML='<p class="empty">No comparisons yet.</p>';return}
+ list.innerHTML=d.records.map(r=>`<div class="pref-item"><div class="p">${esc(r.prompt)}</div><span class="w">winner: ${r.winner}</span> <button class="secondary" data-del="${r.id}" style="float:right;padding:4px 8px;font-size:10px">Delete</button></div>`).join('');
+ list.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>action(async()=>{await api('preferences/delete',{id:Number(b.dataset.del)});await loadPreferences()}));
+}
+loadPreferences();
 </script></html>

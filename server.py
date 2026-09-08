@@ -11,12 +11,24 @@ from brain import Brain, Config, device_name
 from tokenizer import Tokenizer
 import memory
 import sources
+import preferences
+import random
 
 ROOT = Path(__file__).resolve().parent
 LOCK = threading.Lock()
 process = None
 PORT = 8765
 torch.set_num_threads(4)
+
+PREFERENCE_PROMPTS = [
+    'Hello!', 'Introduce yourself', 'What is your name?', 'How are you doing?',
+    'What is 8 plus 5?', 'What is 12 minus 7?', 'What is 6 times 3?',
+    'What is the opposite of happy?', 'What is the opposite of strong?',
+    'What day comes after Friday?', 'List three animals.', 'List three fruits.',
+    'Who wrote Frankenstein?', 'Can you help me?', 'What is the meaning of life?',
+    'Are you conscious?', 'What can you do?', 'Tell me something interesting.',
+    'Repeat the word "ocean" three times.', 'Spell the word "garden" backwards.',
+]
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -62,6 +74,11 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 items = sources.list_sources()
                 self.reply({'sources': items, 'corpus_locked': (ROOT/'checkpoints/latest.pt').exists()})
+            except Exception as exc:
+                self.reply({'error': str(exc)}, 500)
+        elif self.path == '/api/preferences':
+            try:
+                self.reply({'records': preferences.list_recent(), 'count': preferences.count()})
             except Exception as exc:
                 self.reply({'error': str(exc)}, 500)
         else:
@@ -168,6 +185,38 @@ class Handler(BaseHTTPRequestHandler):
                 text, activity = model.generate(prompt_text, count, temp, tokenizer=tokenizer, stop_text='<|end|>')
                 reply = text[len(prompt_text):].strip() if text.startswith(prompt_text) else text.strip()
                 self.reply({'reply': reply, 'activity': activity, 'step': saved['step']})
+            elif self.path == '/api/preferences/pair':
+                p = ROOT/'checkpoints/latest.pt'
+                if running:
+                    raise ValueError('Pause training and wait for its weights to save before generating comparisons.')
+                if not p.exists():
+                    raise ValueError('Train your brain first to create its first checkpoint.')
+                saved = torch.load(p, map_location='cpu', weights_only=True)
+                if saved.get('stage') != 'finetune':
+                    raise ValueError('Preference collection needs a fine-tuned checkpoint.')
+                prompt = str(body.get('prompt', '')).strip()[:2000] or random.choice(PREFERENCE_PROMPTS)
+                model = Brain(Config(**saved['config']))
+                model.load_state_dict(saved['model'])
+                tok_path = ROOT/'checkpoints/tokenizer.json'
+                tokenizer = Tokenizer().load(tok_path) if tok_path.exists() else None
+                wrapped = f'### Instruction:\n{prompt}\n\n### Response:\n'
+                out = []
+                for temp in (0.6, 1.0):
+                    text, _ = model.generate(wrapped, count=120, temperature=temp, tokenizer=tokenizer, stop_text='<|end|>')
+                    out.append(text[len(wrapped):].strip() if text.startswith(wrapped) else text.strip())
+                self.reply({'prompt': prompt, 'response_a': out[0], 'response_b': out[1]})
+            elif self.path == '/api/preferences/vote':
+                prompt = str(body.get('prompt', ''))
+                response_a = str(body.get('response_a', ''))
+                response_b = str(body.get('response_b', ''))
+                winner = str(body.get('winner', ''))
+                if not prompt or not response_a or not response_b:
+                    raise ValueError('Missing prompt or responses.')
+                record_id = preferences.add(prompt, response_a, response_b, winner)
+                self.reply({'ok': True, 'id': record_id, 'count': preferences.count()})
+            elif self.path == '/api/preferences/delete':
+                preferences.delete(int(body['id']))
+                self.reply({'ok': True})
             elif self.path == '/api/memory/add':
                 record_id = memory.add_record(str(body.get('title', '')), str(body.get('content', '')))
                 self.reply({'ok': True, 'id': record_id})

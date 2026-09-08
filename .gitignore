@@ -9,5 +9,6 @@ data/training.txt
 data/instructions.txt
 data/sources/
 memory.db
+preferences.db
 wandb/
 sweeps/
