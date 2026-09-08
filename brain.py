@@ -13,12 +13,14 @@ class Config:
     context: int = 128
     vocab: int = 256
     dropout: float = 0.0
+    attn_scale: float = None  # None = PyTorch default (1/sqrt(head_dim), the paper's formula). Override for experiments.
 
 
 class Block(nn.Module):
     def __init__(self, c):
         super().__init__()
         self.heads = c.heads
+        self.attn_scale = c.attn_scale
         self.norm1 = nn.LayerNorm(c.width)
         self.qkv = nn.Linear(c.width, 3 * c.width)
         self.proj = nn.Linear(c.width, c.width)
@@ -31,7 +33,7 @@ class Block(nn.Module):
         b, t, d = x.shape
         q, k, v = self.qkv(self.norm1(x)).chunk(3, dim=-1)
         q, k, v = [a.reshape(b, t, self.heads, d//self.heads).transpose(1, 2) for a in (q, k, v)]
-        a = F.scaled_dot_product_attention(q, k, v, is_causal=True)
+        a = F.scaled_dot_product_attention(q, k, v, is_causal=True, scale=self.attn_scale)
         x = x + self.drop1(self.proj(a.transpose(1, 2).contiguous().reshape(b, t, d)))
         return x + self.drop2(self.mlp(self.norm2(x)))
 
@@ -79,10 +81,15 @@ class Brain(nn.Module):
         ids = torch.tensor([raw], device=next(self.parameters()).device)
         for _ in range(count):
             logits, _, _ = self(ids[:, -self.config.context:])
-            logits = logits[:, -1] / temperature
-            cutoff = torch.topk(logits, min(40, logits.shape[-1])).values[:, -1:]
-            logits = logits.masked_fill(logits < cutoff, float('-inf'))
-            ids = torch.cat([ids, torch.multinomial(F.softmax(logits, dim=-1), 1)], dim=1)
+            logits = logits[:, -1]
+            if temperature == 0.0:
+                next_id = torch.argmax(logits, dim=-1, keepdim=True)  # greedy: always the top token, no randomness
+            else:
+                logits = logits / temperature
+                cutoff = torch.topk(logits, min(40, logits.shape[-1])).values[:, -1:]
+                logits = logits.masked_fill(logits < cutoff, float('-inf'))
+                next_id = torch.multinomial(F.softmax(logits, dim=-1), 1)
+            ids = torch.cat([ids, next_id], dim=1)
             if stop_text:
                 tail = ids[0, -len(stop_text)-4:].tolist()
                 decoded = tokenizer.decode(tail) if tokenizer else bytes(tail).decode('utf-8', errors='replace')
