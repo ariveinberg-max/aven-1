@@ -31,6 +31,21 @@ The interesting part isn't that this worked — it's the failures, because each 
 
 **Small models memorize arithmetic; they don't compute it.** After all fixes, formal-phrasing arithmetic ("What is 4 plus 9?") is reliably correct, but compact notation ("1+1") produces plausible-looking, consistently wrong answers. This is an honest architectural ceiling at this scale, not a bug — the model is pattern-matching against memorized examples, not performing arithmetic. Real arithmetic capability in language models is understood to be an emergent property of much larger scale, not something a 20M-parameter model trained on a few thousand examples can be expected to have.
 
+## Scaling up: bigger isn't automatically better at a fixed step count
+
+After the pipeline above stabilized on a 19.8M-parameter fine-tuned model, a separate pretraining track tested scale directly: a 58,424,832-parameter model (768-wide, 8 layers, 12 heads) was pretrained on the same six-book, 2.2 MB corpus, then a second, larger 153M-parameter model (1024-wide, 12 layers, 16 heads) was pretrained from scratch on the identical corpus and tokenizer settings, both on a free Colab T4 GPU.
+
+At an equal step count (1000 steps), the larger model was *worse*, not better:
+
+| Model | Parameters | Step | Held-out loss | Held-out perplexity |
+|---|---|---|---|---|
+| Pretrain A | 58.4M | 1000 | 5.551 | 257.56 |
+| Pretrain B | 153M | 1000 | 5.791 | 327.4 |
+
+This isn't a bug or a regression — it's the expected behavior when model size scales up but data and step count don't: a larger model has more parameters to fit against the same roughly 640K training tokens and the same fixed learning rate (3e-4, untuned for the new size), so it takes more gradient steps to reach the same point on the loss curve, independent of its higher ceiling. The 58.4M model, given more steps afterward (2100 total, still on the same fixed corpus), continued falling to a held-out perplexity of 172.07 — well past its own step-1000 mark — which is the more useful comparison than a snapshot at one arbitrary step count.
+
+This is a single-run, single-seed result at a small scale and isn't a general claim about scaling laws — it's a concrete, reproducible instance of the well-known distinction between *model capacity* and *training progress*: a bigger model's advantage shows up in its eventual floor, not necessarily at a fixed step count on a fixed-size dataset, and especially not when the learning rate was tuned for a different model size (see the earlier LR-transfer finding above). The natural next step is running the 153M model well past 1000 steps on the same corpus to see whether it eventually surpasses the 58M model's 172.07 floor, and whether learning-rate retuning for the larger width changes the comparison.
+
 ## RLHF, in progress
 
 The fine-tuning above teaches the model to imitate one written example per prompt. RLHF goes further: it optimizes the model directly against actual human preference, which is closer to why models like ChatGPT feel helpful rather than just "trained on good examples." Three pieces, built and tested against real data, not simulated:
