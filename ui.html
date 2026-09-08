@@ -225,7 +225,7 @@ async function poll(){try{let r=await fetch('/api/status');state=await r.json();
  $('chatStage').textContent=chatReady?'FINE-TUNED':(state.stage==='finetune'?'TRAINING…':'PRETRAIN ONLY');
  $('chatCaption').textContent=chatReady?'Fine-tuned checkpoint loaded. Conversation history is included in the prompt but this model was never specifically trained on multi-turn context, so long threads may drift.':'Chat needs a fine-tuned checkpoint (instruction/response training), not just pretraining. Run the fine-tuning stage first.';
  $('prefNew').disabled=!chatReady||busy;
- $('prefStatus').textContent=chatReady?'Generates two responses to the same prompt at different sampling temperatures — pick the one you\'d actually rather receive.':'Needs a fine-tuned checkpoint to generate comparisons.';
+ $('prefStatus').textContent=chatReady?'Generates two responses to the same prompt at different sampling temperatures — pick the one you\'d actually rather receive. Keyboard: A / B / T, and the next comparison loads automatically.':'Needs a fine-tuned checkpoint to generate comparisons.';
  if(document.querySelector('.view.active[data-view=overview]'))chart()
 }catch(e){$('message').textContent='Cannot reach the local server. Open Start Brain.command to run it.'}}
 async function action(fn){busy=true;$('message').textContent='';await poll();try{await fn()}catch(e){$('message').textContent=e.message}finally{busy=false;await poll()}}
@@ -307,9 +307,16 @@ function renderPrefPair(){
   <div class="pref-card"><span class="label">Response A</span><div class="text">${esc(currentPref.response_a)}</div></div>
   <div class="pref-card"><span class="label">Response B</span><div class="text">${esc(currentPref.response_b)}</div></div>
  </div>
- <div class="pref-actions"><button id="voteA">A is better</button><button id="voteB">B is better</button><button id="voteTie" class="secondary">Tie / both bad</button></div>`;
+ <div class="pref-actions"><button id="voteA">A is better <span style="opacity:.6;font-weight:400">(A)</span></button><button id="voteB">B is better <span style="opacity:.6;font-weight:400">(B)</span></button><button id="voteTie" class="secondary">Tie / both bad <span style="opacity:.6;font-weight:400">(T)</span></button></div>`;
  $('voteA').onclick=()=>vote('a');$('voteB').onclick=()=>vote('b');$('voteTie').onclick=()=>vote('tie');
 }
+document.addEventListener('keydown',e=>{
+ if(!currentPref||busy)return;
+ if(['INPUT','TEXTAREA'].includes(document.activeElement.tagName))return;
+ if(!document.querySelector('.view.active[data-view=preferences]'))return;
+ let k=e.key.toLowerCase();
+ if(k==='a')vote('a');else if(k==='b')vote('b');else if(k==='t')vote('tie');
+});
 async function newComparison(){
  await action(async()=>{
   $('prefPair').innerHTML='<p class="caption">Generating two responses…</p>';
