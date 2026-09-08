@@ -13,7 +13,7 @@ Every stage a real language model goes through, built by hand at a scale a lapto
 - **Real experiment tracking**: Weights & Biases logging loss, held-out perplexity, gradient norm, weight norm, per-layer gradient/weight histograms, throughput, and a live table of sample generations that updates during training.
 - **A hyperparameter sweep** (`sweep.yaml`) — 31 automated runs searching learning rate, dropout, and batch size, with W&B's parallel-coordinates view showing learning rate as the dominant factor for held-out perplexity.
 - **A free cloud GPU path** (`Aven-1-Colab.ipynb`) — the identical training code running on a Colab T4 GPU instead of the M2's CPU/MPS, verified end to end: trained remotely, downloaded, and continued locally without incident.
-- **RLHF, in progress** (`preferences.py`, `reward_model.py`, `train_reward.py`, `raft.py`) — real human preference collection, a reward model, and RAFT (reward-ranked fine-tuning); see below for what building it against real, insufficient data revealed immediately.
+- **RLHF, in progress** (`preferences.py`, `reward_model.py`, `train_reward.py`, `raft.py`, `ppo.py`, `value_model.py`) — real human preference collection, a reward model, RAFT (reward-ranked fine-tuning), and a full PPO implementation with PPO-ptx (value network, GAE, clipped objective, KL penalty, pretraining-loss anchor); see below for what building each against real, limited data revealed.
 
 Current model: 19.8M parameters (512-wide, 6 layers, 8 heads, 192-token context, 1,536-token vocabulary), fine-tuned through five iterations on progressively larger and more diverse instruction data (6,000 → 17,400 examples).
 
@@ -49,12 +49,29 @@ The fine-tuning above teaches the model to imitate one written example per promp
 
 This stage is intentionally left mid-flight rather than pushed to a fake finish: RLHF's entire premise depends on real, sufficient human preference data, and that can't be rushed or synthesized without defeating the point. (Deliberately: no automated or AI-generated preference labels were used anywhere in this — that would be a different, weaker technique called RLAIF, not what's documented here.)
 
+## Full PPO, and the tradeoff it forced into the open
+
+RAFT approximates RLHF's direction without its machinery. The actual algorithm behind InstructGPT/ChatGPT is PPO (Proximal Policy Optimization): a policy network, a value network estimating expected future reward per token, Generalized Advantage Estimation, a clipped surrogate objective, and a KL penalty against a frozen reference model so the policy can't drift into gibberish that scores well but means nothing. All of it implemented (`ppo.py`, `value_model.py`), not approximated further — this project's rule throughout has been to build the real mechanism and report what actually happens, not what should happen in theory.
+
+**First real run exposed a genuine, literature-documented failure mode.** With plain PPO — no anchoring beyond the KL term — rollouts were correctly bounded (KL stayed under 1.3, nowhere near collapse) and the loss curves looked entirely healthy. But comparing actual generations before and after told a different story: **arithmetic broke completely** ("What is 4 plus 9?" went from the correct "13" to an unrelated "Of course, go ahead.") — a category PPO never even rolled out on. The cause: PPO updates the entire shared 19.8M-parameter backbone from whatever narrow slice of prompts it's currently training on, so pushing hard on one slice (identity/greeting prompts, here) can quietly disturb everything else, independent of whether the KL-to-reference stays small. InstructGPT's own paper documents exactly this and fixes it with what they call **PPO-ptx**: mixing the original pretraining loss back into every PPO update, so gradients keep getting pulled toward the network's original broad competence at the same time they optimize for reward.
+
+**Implementing PPO-ptx and sweeping its one real hyperparameter (the mix-in coefficient) produced a complete, honest result — not a clean win, but a real one:**
+
+| `ptx_coef` | Outcome |
+|---|---|
+| 0 (no anchor) | Catastrophic: arithmetic broken, an untouched category damaged |
+| 0.05 | Partial: some categories broke (identity responses truncated mid-sentence, "Goodbye" produced garbled hallucinated text, calendar answers corrupted), others (arithmetic, most greetings) survived intact |
+| 1.0 | Zero regression — 8 of 9 tested prompts produced byte-identical output to before PPO — but also zero meaningful learning; the anchor term (~0.2-0.35 in magnitude) fully dominated the actual policy gradient (~0.0001-0.05 in magnitude) |
+
+No coefficient tested here both avoided regression and produced meaningful improvement. That is the actual, verifiable conclusion, and it's consistent with the literature: PPO is known to need substantially more preference data than a method like RAFT to be stable, precisely because it optimizes the whole network directly and continuously rather than doing targeted supervised fine-tuning on a small set of verified-good examples. 34 real comparisons is enough to train a reward model with genuine signal (87.5% held-out accuracy) and enough for RAFT to safely improve specific, verified categories — it is not enough to safely drive full PPO. None of the three PPO checkpoints from this experiment were promoted; they're preserved under `checkpoints-ppo-experiments/` as evidence, and the real, working model in `checkpoints/` is the RAFT-improved one from the previous section.
+
 ## Honest scope
 
 This is not a ChatGPT competitor and was never intended to be. It's a demonstration — and a real one, not a toy that fakes the stages — of what building a language model from first principles actually involves: a tokenizer trained from scratch, a real pretrain→fine-tune pipeline, honest evaluation via held-out perplexity, a genuine hyperparameter search with reproducible findings, and a debugging process where every fix came from a diagnosed cause, not guesswork. Closing the remaining gap to something like ChatGPT is a difference of roughly four to five orders of magnitude in parameters, data, and compute — a gap of infrastructure and resources, not of understanding the underlying method.
 
 ## What's next
 
-- Label enough real preference comparisons (aiming for 100+ decided, non-tie pairs) to make the reward model and RAFT results actually meaningful, rather than confidently wrong
+- Label substantially more real preference comparisons — the PPO experiments above suggest 34 isn't enough for stable direct policy optimization, even though it's already enough for RAFT and a genuinely signal-carrying reward model
+- Revisit PPO once there's more data: try a wider ptx-coefficient sweep, and consider rolling out on the full prompt distribution (not just identity/greeting categories) so the policy gradient itself has less reason to forget unrelated capabilities
 - Continued data diversity work, particularly multi-turn conversation quality
-- Deeper study of the foundational papers (*Attention Is All You Need*, the GPT series, scaling laws) now that every mechanism they describe has been implemented and debugged firsthand
+- Deeper study of the foundational papers (*Attention Is All You Need*, the GPT series, scaling laws, and now InstructGPT specifically) now that every mechanism they describe — including PPO and PPO-ptx — has been implemented and debugged firsthand
