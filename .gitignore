@@ -7,6 +7,7 @@ checkpoints-*/
 work/
 data/training.txt
 data/instructions.txt
+data/raft.txt
 data/sources/
 memory.db
 preferences.db
