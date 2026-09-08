@@ -21,13 +21,25 @@ PORT = 8765
 torch.set_num_threads(4)
 
 PREFERENCE_PROMPTS = [
-    'Hello!', 'Introduce yourself', 'What is your name?', 'How are you doing?',
-    'What is 8 plus 5?', 'What is 12 minus 7?', 'What is 6 times 3?',
-    'What is the opposite of happy?', 'What is the opposite of strong?',
-    'What day comes after Friday?', 'List three animals.', 'List three fruits.',
-    'Who wrote Frankenstein?', 'Can you help me?', 'What is the meaning of life?',
-    'Are you conscious?', 'What can you do?', 'Tell me something interesting.',
-    'Repeat the word "ocean" three times.', 'Spell the word "garden" backwards.',
+    # Genuinely novel prompts — not close to any category the model was drilled on
+    # (arithmetic, antonyms, calendar, fallback-triggers). Well-drilled categories tie
+    # regardless of sampling temperature because their output distribution is extremely
+    # peaked; real preference signal needs prompts where the model is actually uncertain.
+    'Write a short story about a robot who wants to learn to paint.',
+    "What's the best way to spend a weekend?",
+    'Describe what a city on the moon might look like.',
+    'What do you think about school?',
+    'Write a poem about the ocean.',
+    'If you could change one thing about yourself, what would it be?',
+    'Explain why the sky is blue.',
+    'What makes a good friend?',
+    'Tell me a story about a dragon who is afraid of fire.',
+    'What would you do with a million dollars?',
+    'Describe your perfect day.',
+    'Write the beginning of a mystery novel.',
+    'What is the strangest animal you can imagine?',
+    'How do you think computers will change in the future?',
+    'Give me a recipe for something creative, even if it sounds silly.',
 ]
 
 
@@ -201,7 +213,7 @@ class Handler(BaseHTTPRequestHandler):
                 tokenizer = Tokenizer().load(tok_path) if tok_path.exists() else None
                 wrapped = f'### Instruction:\n{prompt}\n\n### Response:\n'
                 out = []
-                for temp in (0.6, 1.0):
+                for temp in (0.4, 1.4):
                     text, _ = model.generate(wrapped, count=120, temperature=temp, tokenizer=tokenizer, stop_text='<|end|>')
                     out.append(text[len(wrapped):].strip() if text.startswith(wrapped) else text.strip())
                 self.reply({'prompt': prompt, 'response_a': out[0], 'response_b': out[1]})
