@@ -24,23 +24,17 @@ from tokenizer import Tokenizer
 ROOT = Path(__file__).resolve().parent
 
 RAFT_PROMPTS = [
-    'Write a short story about a robot who wants to learn to paint.',
-    "What's the best way to spend a weekend?",
-    'Describe what a city on the moon might look like.',
-    'What do you think about school?',
-    'Write a poem about the ocean.',
-    'If you could change one thing about yourself, what would it be?',
-    'Explain why the sky is blue.',
-    'What makes a good friend?',
-    'Tell me a story about a dragon who is afraid of fire.',
-    'What would you do with a million dollars?',
-    'Describe your perfect day.',
-    'Write the beginning of a mystery novel.',
-    'What is the strangest animal you can imagine?',
-    'How do you think computers will change in the future?',
-    'Give me a recipe for something creative, even if it sounds silly.',
-    'Introduce yourself', 'How are you doing?', 'Can you help me?',
-    'What is the meaning of life?', 'Tell me something interesting.',
+    # Mostly identity/greeting/wellbeing/help-style prompts: trained with MULTIPLE valid
+    # replies each, so sampling picks between genuinely different, coherent, correct
+    # phrasings — real judgment calls. Long-form requests (stories, poems) are excluded:
+    # this model only ever saw 1-2 sentence training responses, so extended prose is past
+    # its ceiling and just produces noise regardless of temperature.
+    'Introduce yourself', 'Who are you?', 'Tell me about yourself', 'What kind of AI are you?',
+    'Hello!', 'Hey there', 'Good morning', 'How are you doing?', "How's it going?",
+    'Thank you', 'Thanks for the help', 'Can you help me?', 'I have a question',
+    'Goodbye', 'See you later',
+    'What do you think about school?', 'What makes a good friend?',
+    'Would you rather be invisible or be able to fly?', 'Is it better to be cautious or take risks?',
 ]
 
 
@@ -98,8 +92,8 @@ def main():
         wrapped = f'### Instruction:\n{prompt}\n\n### Response:\n'
         candidates = []
         for i in range(args.candidates):
-            temp = 0.6 + 0.6 * (i / max(args.candidates - 1, 1))  # spread from 0.6 to 1.2
-            text, _ = policy.generate(wrapped, count=120, temperature=temp, tokenizer=tokenizer, stop_text='<|end|>')
+            temp = 0.5 + 0.4 * (i / max(args.candidates - 1, 1))  # spread from 0.5 to 0.9
+            text, _ = policy.generate(wrapped, count=60, temperature=temp, tokenizer=tokenizer, stop_text='<|end|>')
             response = text[len(wrapped):].strip() if text.startswith(wrapped) else text.strip()
             if response:
                 candidates.append(response)

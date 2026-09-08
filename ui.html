@@ -302,7 +302,8 @@ loadMemory();loadSources();
 let currentPref=null;
 function renderPrefPair(){
  if(!currentPref){$('prefPair').innerHTML='';return}
- $('prefPair').innerHTML=`<div class="pref-grid">
+ $('prefPair').innerHTML=`<p class="caption" style="font-size:13px;color:var(--ink);margin-bottom:4px"><b>Prompt:</b> ${esc(currentPref.prompt)}</p>
+ <div class="pref-grid">
   <div class="pref-card"><span class="label">Response A</span><div class="text">${esc(currentPref.response_a)}</div></div>
   <div class="pref-card"><span class="label">Response B</span><div class="text">${esc(currentPref.response_b)}</div></div>
  </div>

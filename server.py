@@ -21,25 +21,19 @@ PORT = 8765
 torch.set_num_threads(4)
 
 PREFERENCE_PROMPTS = [
-    # Genuinely novel prompts — not close to any category the model was drilled on
-    # (arithmetic, antonyms, calendar, fallback-triggers). Well-drilled categories tie
-    # regardless of sampling temperature because their output distribution is extremely
-    # peaked; real preference signal needs prompts where the model is actually uncertain.
-    'Write a short story about a robot who wants to learn to paint.',
-    "What's the best way to spend a weekend?",
-    'Describe what a city on the moon might look like.',
-    'What do you think about school?',
-    'Write a poem about the ocean.',
-    'If you could change one thing about yourself, what would it be?',
-    'Explain why the sky is blue.',
-    'What makes a good friend?',
-    'Tell me a story about a dragon who is afraid of fire.',
-    'What would you do with a million dollars?',
-    'Describe your perfect day.',
-    'Write the beginning of a mystery novel.',
-    'What is the strangest animal you can imagine?',
-    'How do you think computers will change in the future?',
-    'Give me a recipe for something creative, even if it sounds silly.',
+    # Mostly identity/greeting/wellbeing/help-style prompts: these were trained with
+    # MULTIPLE valid replies each (not one canned answer per exact question, unlike the
+    # fallback category), so sampling genuinely picks between different coherent, correct
+    # phrasings — real judgment calls, not noise. A few short opinion/hypothetical prompts
+    # mixed in for harder cases. Long-form requests (stories, poems) are deliberately
+    # excluded: this model was only ever fine-tuned on 1-2 sentence responses, so anything
+    # asking for extended prose is past its actual ceiling and just produces noise.
+    'Introduce yourself', 'Who are you?', 'Tell me about yourself', 'What kind of AI are you?',
+    'Hello!', 'Hey there', 'Good morning', 'How are you doing?', "How's it going?",
+    'Thank you', 'Thanks for the help', 'Can you help me?', 'I have a question',
+    'Goodbye', 'See you later',
+    'What do you think about school?', 'What makes a good friend?',
+    'Would you rather be invisible or be able to fly?', 'Is it better to be cautious or take risks?',
 ]
 
 
@@ -213,8 +207,8 @@ class Handler(BaseHTTPRequestHandler):
                 tokenizer = Tokenizer().load(tok_path) if tok_path.exists() else None
                 wrapped = f'### Instruction:\n{prompt}\n\n### Response:\n'
                 out = []
-                for temp in (0.4, 1.4):
-                    text, _ = model.generate(wrapped, count=120, temperature=temp, tokenizer=tokenizer, stop_text='<|end|>')
+                for temp in (0.5, 0.9):
+                    text, _ = model.generate(wrapped, count=60, temperature=temp, tokenizer=tokenizer, stop_text='<|end|>')
                     out.append(text[len(wrapped):].strip() if text.startswith(wrapped) else text.strip())
                 self.reply({'prompt': prompt, 'response_a': out[0], 'response_b': out[1]})
             elif self.path == '/api/preferences/vote':
