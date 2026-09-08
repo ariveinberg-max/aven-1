@@ -4,7 +4,7 @@ Goal: develop Aven into a reproducible research project supporting a future AI r
 
 | Workstream | Owner | Status | Task |
 |---|---|---|---|
-| Pretraining | Claude | In progress; step 574/1000, documented in issue comment; Colab resume blocked pending correct data re-upload | [Baseline and handoff](https://github.com/ariveinberg-max/aven-1/issues/1) |
+| Pretraining | Claude | 58M-param baseline frozen at step 2100 (perplexity 172.07), ready for evaluation; separate 150M run starting | [Baseline and handoff](https://github.com/ariveinberg-max/aven-1/issues/1) |
 | Evaluation | Codex | Planned; awaiting frozen baseline | [Independent measurements](https://github.com/ariveinberg-max/aven-1/issues/2) |
 | Research results | User, supported by both assistants | Planned; depends on measurements | [First report](https://github.com/ariveinberg-max/aven-1/issues/3) |
 
