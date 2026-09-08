@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Aven-1</title>
+<style>
+:root{color-scheme:dark;--bg:#0a0b0c;--panel:#131415;--panel2:#101112;--line:#232426;--line2:#2c2d30;--ink:#eeeeef;--muted:#8b8b90;--dim:#5c5c60;--accent:#e8e8ea;--sidebar:#0d0e0f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+button,input,textarea,select{font-family:inherit}
+.app{display:flex;min-height:100vh}
+
+/* Sidebar */
+.sidebar{width:230px;flex:none;background:var(--sidebar);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:20px 14px;position:sticky;top:0;height:100vh}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 8px 22px}
+.brand .mark{width:26px;height:26px;border-radius:7px;background:linear-gradient(155deg,#3a4a56,#1c2226);border:1px solid #3a4750;display:flex;align-items:center;justify-content:center;flex:none}
+.brand .mark svg{width:14px;height:14px}
+.brand .name{font-size:14px;font-weight:600;letter-spacing:-.2px}
+.brand .sub{font-size:10px;color:var(--dim);letter-spacing:.3px;margin-top:1px}
+nav.tabs{display:flex;flex-direction:column;gap:2px}
+nav.tabs button{all:unset;display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:6px;font-size:13px;color:var(--muted);cursor:pointer}
+nav.tabs button svg{width:15px;height:15px;flex:none;opacity:.75}
+nav.tabs button:hover{background:#18191b;color:var(--ink)}
+nav.tabs button.active{background:#1c1e20;color:var(--ink)}
+nav.tabs button.active svg{opacity:1}
+.sidebar-foot{margin-top:auto;padding:10px 8px;font-size:10px;color:var(--dim);border-top:1px solid var(--line);padding-top:14px;line-height:1.7}
+.sidebar-foot .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#7d9;margin-right:6px}
+
+/* Main content */
+.content{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:16px 28px;border-bottom:1px solid var(--line);background:#0a0b0cee;position:sticky;top:0;z-index:5;backdrop-filter:blur(6px)}
+.crumb{font-size:12px;color:var(--dim)}
+.crumb b{color:var(--muted);font-weight:500}
+.crumb .current{color:var(--ink);font-weight:600}
+.topstats{display:flex;gap:22px;align-items:center}
+.topstat{text-align:right}
+.topstat span{display:block;font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+.topstat strong{font:13px ui-monospace,SFMono-Regular,monospace;color:var(--ink)}
+.pill{font:10px ui-monospace,monospace;text-transform:uppercase;letter-spacing:1px;padding:4px 9px;border-radius:20px;border:1px solid var(--line2);color:var(--muted)}
+.pill.live{color:#8fd19e;border-color:#2b4030}
+
+.view{display:none;padding:26px 28px 60px;max-width:1320px;width:100%;margin:0 auto}
+.view.active{display:block}
+.view h1{font-size:22px;font-weight:600;letter-spacing:-.3px;margin:0 0 6px}
+.view .lede{color:var(--muted);font-size:13px;line-height:1.7;max-width:760px;margin:0 0 24px}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:18px}
+.panelhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:2px}
+.panelhead h2{font-size:13px;font-weight:600;margin:0}
+.eyebrow{color:var(--dim);text-transform:uppercase;font:10px ui-monospace,monospace;letter-spacing:1.6px;margin:0 0 6px}
+.panelhead small{font:9px ui-monospace,monospace;color:var(--dim);letter-spacing:1px;border:1px solid var(--line2);padding:3px 7px;border-radius:4px}
+
+canvas{display:block;width:100%}
+#chart{height:150px;margin-top:16px}
+.caption{font-size:11.5px;line-height:1.75;color:var(--muted)}
+.legend{font-size:10px;color:#8fb4c9}
+
+label{display:block;font-size:11px;color:var(--muted);margin:18px 0 8px;letter-spacing:.2px}
+input,textarea,select{width:100%;background:var(--panel2);border:1px solid var(--line2);color:var(--ink);padding:10px 12px;border-radius:6px;font-size:12.5px}
+textarea{resize:vertical;min-height:85px}
+input:focus-visible,textarea:focus-visible,select:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid #4a5560;outline-offset:2px}
+
+button{border:0;border-radius:6px;background:var(--accent);color:#111;padding:10px 16px;font-weight:600;font-size:12px;cursor:pointer;transition:background .12s,opacity .12s}
+button:hover:not(:disabled){background:#fff}
+button:disabled{opacity:.35;cursor:not-allowed}
+.secondary{background:#1c1d1f;color:var(--ink);border:1px solid var(--line2)}
+.secondary:hover:not(:disabled){background:#232426}
+.row{display:flex;gap:8px;align-items:center;margin-top:14px}
+.row select{width:auto;flex:1}
+
+.state{color:var(--muted);border:1px solid var(--line2);border-radius:4px;font:10px ui-monospace,monospace;text-transform:uppercase;letter-spacing:1px;padding:4px 8px}
+#message{min-height:20px;color:#ddb98a;margin:16px 28px 0;font-size:12px;white-space:pre-wrap;max-width:1320px;margin-left:auto;margin-right:auto}
+details{border-top:1px solid var(--line);padding-top:14px;margin-top:18px}
+details summary{cursor:pointer;color:var(--muted);font-size:11.5px}
+
+.kicker{font-size:11px;line-height:1.7;color:var(--muted);padding:10px 12px;border:1px solid var(--line);border-radius:6px;margin-bottom:16px;background:var(--panel2)}
+.kicker b{color:var(--ink);font-weight:600}
+.itemlist{display:flex;flex-direction:column;gap:8px;margin-bottom:18px;max-height:280px;overflow-y:auto}
+.item{border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--panel2)}
+.item .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.item .name{font-size:12px;color:var(--ink);font-weight:600;overflow-wrap:anywhere}
+.item .meta{font:10px ui-monospace,monospace;color:var(--dim);white-space:nowrap}
+.item .preview{font-size:11px;color:var(--muted);margin-top:5px;overflow-wrap:anywhere;white-space:pre-wrap;max-height:48px;overflow:hidden}
+.item .actions{display:flex;gap:6px;margin-top:8px}
+.item button{padding:6px 10px;font-size:10px}
+.empty{font-size:11px;color:var(--dim);padding:14px 0}
+
+.chatlog{display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 420px);min-height:220px;overflow-y:auto;margin-bottom:14px;padding-right:2px}
+.chatlog:empty::after{content:'No messages yet. Ask something below.';font-size:11px;color:var(--dim)}
+.bubble{max-width:78%;padding:10px 13px;border-radius:9px;font-size:12.5px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+.bubble.user{align-self:flex-end;background:#232b30;color:var(--ink)}
+.bubble.assistant{align-self:flex-start;background:var(--panel2);border:1px solid var(--line);color:#d1d1d5}
+.bubble.pending{color:var(--dim);font-style:italic}
+#chatPanel .row{align-items:flex-end}
+#chatInput{min-height:40px;resize:none;flex:1}
+
+@media(max-width:800px){
+ .sidebar{position:fixed;left:0;top:0;bottom:0;transform:translateX(-100%);transition:transform .18s;z-index:20}
+ .sidebar.open{transform:translateX(0)}
+ .topbar{padding:14px 16px}.view{padding:18px 16px 50px}
+ #message{margin-left:16px;margin-right:16px}
+}
+</style>
+<div class="app">
+<nav class="sidebar" id="sidebar">
+<div class="brand"><div class="mark"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="#cfe3ee" stroke-width="1.4"/><circle cx="4" cy="6" r="1.6" fill="#cfe3ee"/><circle cx="20" cy="6" r="1.6" fill="#cfe3ee"/><circle cx="4" cy="18" r="1.6" fill="#cfe3ee"/><circle cx="20" cy="18" r="1.6" fill="#cfe3ee"/><path d="M9.8 10.3 5.2 6.9M14.2 10.3 18.8 6.9M9.8 13.7 5.2 17.1M14.2 13.7 18.8 17.1" stroke="#4a6270" stroke-width="1.1"/></svg></div><div><div class="name">Aven-1</div><div class="sub">local workspace</div></div></div>
+<nav class="tabs">
+<button data-tab="overview" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/></svg>Overview</button>
+<button data-tab="train"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 17 9 9l4 4 8-9"/><path d="M15 4h6v6"/></svg>Train</button>
+<button data-tab="chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 5h16v11H8l-4 4V5Z"/></svg>Chat</button>
+<button data-tab="data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="12" cy="5" rx="8" ry="2.6"/><path d="M4 5v14c0 1.4 3.6 2.6 8 2.6s8-1.2 8-2.6V5"/><path d="M4 12c0 1.4 3.6 2.6 8 2.6s8-1.2 8-2.6"/></svg>Training data</button>
+<button data-tab="memory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Memory</button>
+</nav>
+<div class="sidebar-foot"><span class="dot"></span>M2 local · no cloud inference<br>Byte/BPE Transformer, trained from scratch</div>
+</nav>
+
+<div class="content">
+<div class="topbar">
+<div class="crumb"><b>Aven-1</b> / <span class="current" id="crumbCurrent">Overview</span></div>
+<div class="topstats">
+<div class="topstat"><span>Params</span><strong id="params">–</strong></div>
+<div class="topstat"><span>Step</span><strong id="step">0</strong></div>
+<div class="topstat"><span>Compute</span><strong id="device">…</strong></div>
+<span class="pill" id="state">Ready</span>
+</div>
+</div>
+
+<section class="view active" data-view="overview">
+<h1>Training performance</h1>
+<p class="lede">A causal Transformer trained from random weights on this Mac. No pretrained model, API, or cloud inference is involved anywhere in this pipeline.</p>
+<div class="panel"><div class="panelhead"><h2>Loss / step</h2><small>LOSS / STEP</small></div><p class="caption">Lower loss means better next-token prediction. Held-out text is excluded from gradient updates. A lower loss does not prove reasoning ability.</p><canvas id="chart" aria-label="Training and validation loss chart"></canvas><div class="legend">● Training <span style="color:#b6b8c1;margin-left:16px">● Held-out</span></div><p class="caption" id="lossText">No measurements yet.</p></div>
+</section>
+
+<section class="view" data-view="train">
+<h1>Train</h1>
+<p class="lede">Resume training on the current corpus.</p>
+<div class="panel"><h2>Training session <span class="state" id="trainState">Ready</span></h2><p class="caption" id="dataset">The included original practice stories are for checking the training pipeline. They are too narrow to teach broad conversation.</p><label for="steps">Additional training steps</label><div class="row"><select id="steps"><option value="100">100 · short session</option><option value="200" selected>200 · starter session</option><option value="500">500 · longer session</option><option value="1000">1,000 · extended session</option></select></div><div class="row"><button id="train">Resume training</button><button id="stop" class="secondary" disabled>Pause & save</button></div><p class="caption">Progress saves every 20 steps and when paused. Resume keeps the model and optimizer state. To use your own training text, see the Training data tab.</p></div>
+</section>
+
+<section class="view" data-view="chat">
+<h1>Chat</h1>
+<div class="panel" id="chatPanel"><div class="panelhead"><h2>Conversation</h2><small id="chatStage">PRETRAIN ONLY</small></div><p class="caption" id="chatCaption">Chat needs a fine-tuned checkpoint (instruction/response training), not just pretraining. Run the fine-tuning stage first.</p><div id="chatLog" class="chatlog"></div><div class="row"><textarea id="chatInput" placeholder="Ask something…" rows="1"></textarea><button id="chatSend" disabled>Send</button><button id="chatClear" class="secondary">Clear</button></div><p class="caption">Each reply is generated fresh from a small model trained on a few thousand synthetic instruction examples — expect narrow, sometimes repetitive answers, not broad conversation.</p></div>
+</section>
+
+<section class="view" data-view="data">
+<h1>Training-data workspace</h1>
+<p class="lede">These are plain text files, not learned weights — the corpus a <em>future</em> run would learn from.</p>
+<div class="panel"><div class="panelhead"><div><p class="eyebrow">Before training</p><h2>Sources</h2></div><small id="sourcesLock"></small></div>
+<p class="kicker">Add or edit sources here, then <b>compile</b> them into <code>data/training.txt</code> before starting a run. Once a checkpoint exists, the corpus is locked — see README to start a fresh run.</p>
+<div id="sourceList" class="itemlist"><p class="empty">No sources yet.</p></div>
+<div class="row"><button id="compileSources" class="secondary">Compile into training corpus</button></div>
+<details id="sourceForm"><summary>Add or edit a source</summary>
+<label for="sourceName">Source name</label><input id="sourceName" placeholder="e.g. chapter-1.txt">
+<label for="sourceText">Text</label><textarea id="sourceText" placeholder="Paste text for this source…"></textarea>
+<div class="row"><button id="saveSource" class="secondary">Save source</button><button id="cancelSource" class="secondary">Clear</button></div>
+</details>
+</div>
+</section>
+
+<section class="view" data-view="memory">
+<h1>Memory</h1>
+<p class="lede">Stored, editable, not learned — the opposite of the model's opaque parameters.</p>
+<div class="panel"><div class="panelhead"><div><p class="eyebrow">Stored, editable, not learned</p><h2>Records</h2></div><small>SQLITE</small></div>
+<p class="kicker">Notes you save here live in <code>memory.db</code>. They are <b>not</b> part of the network's learned weights, and generation does not read this database automatically. Inspect, edit, or delete any record below.</p>
+<div id="memoryList" class="itemlist"><p class="empty">No memory records yet.</p></div>
+<details id="memoryForm" open><summary>Add or edit a record</summary>
+<label for="memoryTitle">Title (optional)</label><input id="memoryTitle" placeholder="e.g. project idea">
+<label for="memoryContent">Content</label><textarea id="memoryContent" placeholder="Write a note to store…"></textarea>
+<div class="row"><button id="saveMemory" class="secondary">Save record</button><button id="cancelMemory" class="secondary">Clear</button></div>
+</details>
+</div>
+</section>
+
+<div id="message" role="status"></div>
+</div>
+</div>
+<script>
+const $=id=>document.getElementById(id);let state={},busy=false;
+async function api(path,body){let r=await fetch('/api/'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});let d=await r.json();if(!r.ok)throw Error(d.error);return d}
+function canvas(id){let c=$(id),r=c.getBoundingClientRect(),d=devicePixelRatio||1;c.width=r.width*d;c.height=r.height*d;let x=c.getContext('2d');x.scale(d,d);return [x,r.width,r.height]}
+
+const TAB_NAMES={overview:'Overview',train:'Train',chat:'Chat',data:'Training data',memory:'Memory'};
+document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>{
+ document.querySelectorAll('nav.tabs button').forEach(x=>x.classList.remove('active'));
+ b.classList.add('active');
+ let tab=b.dataset.tab;
+ document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.dataset.view===tab));
+ $('crumbCurrent').textContent=TAB_NAMES[tab]||tab;
+ if(tab==='overview')chart();
+});
+
+function chart(){let [x,w,h]=canvas('chart'),a=state.history||[];x.strokeStyle='#2d2e32';for(let i=0;i<4;i++){let y=12+i*(h-36)/3;x.beginPath();x.moveTo(32,y);x.lineTo(w-10,y);x.stroke()}if(!a.length){x.fillStyle='#97979e';x.fillText('Train to record your first measurements',35,h/2);return}let vals=a.flatMap(v=>[v.train_loss,v.val_loss]).filter(v=>v!==null&&Number.isFinite(v));let max=Math.max(...vals)*1.1,min=0,last=Math.max(a[a.length-1].step,1);x.fillStyle='#97979e';x.font='10px monospace';x.fillText(max.toFixed(1),0,16);x.fillText('0',12,h-24);x.fillText('step 0',32,h-3);x.fillText('step '+last,w-80,h-3);for(let [key,color]of [['train_loss','#89aec5'],['val_loss','#b6b8c1']]){x.strokeStyle=color;x.lineWidth=2;x.beginPath();let first=true;for(let v of a){if(v[key]==null)continue;let px=32+v.step/last*(w-44),py=12+(1-v[key]/max)*(h-38);if(first){x.moveTo(px,py);first=false}else x.lineTo(px,py)}x.stroke()}let v=a[a.length-1];$('lossText').textContent=`Step ${v.step} · held-out loss ${v.val_loss.toFixed(3)}${v.train_loss==null?'':' · training loss '+v.train_loss.toFixed(3)}`}
+async function poll(){try{let r=await fetch('/api/status');state=await r.json();
+ let stateLabel=state.running?'Training':state.status;
+ $('state').textContent=stateLabel;$('state').classList.toggle('live',!!state.running);
+ $('trainState').textContent=stateLabel;
+ $('step').textContent=state.step||0;
+ $('device').textContent={mps:'M2 GPU',cuda:'CUDA GPU'}[state.device]||'CPU';
+ if(state.parameters)$('params').textContent=(state.parameters/1e6).toFixed(2)+'M';
+ $('train').disabled=state.running||busy;$('stop').disabled=!state.running;if(state.error)$('message').textContent=state.error;
+ let chatReady=state.stage==='finetune'&&!state.running&&state.checkpoint;
+ $('chatSend').disabled=!chatReady||busy;$('chatInput').disabled=!chatReady;
+ $('chatStage').textContent=chatReady?'FINE-TUNED':(state.stage==='finetune'?'TRAINING…':'PRETRAIN ONLY');
+ $('chatCaption').textContent=chatReady?'Fine-tuned checkpoint loaded. Conversation history is included in the prompt but this model was never specifically trained on multi-turn context, so long threads may drift.':'Chat needs a fine-tuned checkpoint (instruction/response training), not just pretraining. Run the fine-tuning stage first.';
+ if(document.querySelector('.view.active[data-view=overview]'))chart()
+}catch(e){$('message').textContent='Cannot reach the local server. Open Start Brain.command to run it.'}}
+async function action(fn){busy=true;$('message').textContent='';await poll();try{await fn()}catch(e){$('message').textContent=e.message}finally{busy=false;await poll()}}
+$('train').onclick=()=>action(async()=>{await api('train',{steps:Number($('steps').value)});$('message').textContent='Training is starting. The first step may take a moment.'});$('stop').onclick=()=>action(async()=>{await api('stop',{});$('message').textContent='Finishing the current step and saving weights…'});
+let chatHistory=[];
+function renderChat(){
+ $('chatLog').innerHTML=chatHistory.map(m=>`<div class="bubble ${m.role}${m.pending?' pending':''}">${esc(m.content)}</div>`).join('');
+ $('chatLog').scrollTop=$('chatLog').scrollHeight;
+}
+async function sendChat(){
+ let text=$('chatInput').value.trim();
+ if(!text||busy)return;
+ chatHistory.push({role:'user',content:text});
+ $('chatInput').value='';
+ chatHistory.push({role:'assistant',content:'…thinking…',pending:true});
+ renderChat();
+ await action(async()=>{
+  let d=await api('chat',{messages:chatHistory.filter(m=>!m.pending).map(m=>({role:m.role,content:m.content}))});
+  chatHistory.pop();
+  chatHistory.push({role:'assistant',content:d.reply||'(empty response)'});
+  renderChat();
+ });
+}
+$('chatSend').onclick=sendChat;
+$('chatInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat()}});
+$('chatClear').onclick=()=>{chatHistory=[];renderChat()};
+window.addEventListener('resize',()=>{if(document.querySelector('.view.active[data-view=overview]'))chart()});
+poll();setInterval(poll,2000);
+
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
+let editingMemoryId=null;
+async function loadMemory(){
+ let d=await (await fetch('/api/memory')).json();
+ let list=$('memoryList');
+ if(!d.records||!d.records.length){list.innerHTML='<p class="empty">No memory records yet.</p>';return}
+ list.innerHTML=d.records.map(r=>`<div class="item"><div class="top"><span class="name">${esc(r.title||'(untitled)')}</span><span class="meta">#${r.id} · ${esc((r.updated_at||'').slice(0,19).replace('T',' '))}</span></div><div class="preview">${esc(r.content)}</div><div class="actions"><button class="secondary" data-edit="${r.id}">Edit</button><button class="secondary" data-use="${r.id}">Ask in chat</button><button class="secondary" data-del="${r.id}">Delete</button></div></div>`).join('');
+ list.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{let r=d.records.find(x=>x.id==b.dataset.edit);editingMemoryId=r.id;$('memoryTitle').value=r.title||'';$('memoryContent').value=r.content;$('memoryForm').open=true;$('memoryTitle').scrollIntoView({block:'center',behavior:'smooth'})});
+ list.querySelectorAll('[data-use]').forEach(b=>b.onclick=()=>{let r=d.records.find(x=>x.id==b.dataset.use);document.querySelector('[data-tab=chat]').click();$('chatInput').value=r.content.slice(0,400)});
+ list.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>action(async()=>{if(!confirm('Delete this memory record permanently?'))return;await api('memory/delete',{id:Number(b.dataset.del)});$('message').textContent='Deleted memory record.';await loadMemory()}));
+}
+$('saveMemory').onclick=()=>action(async()=>{
+ let title=$('memoryTitle').value,content=$('memoryContent').value;
+ if(editingMemoryId){await api('memory/update',{id:editingMemoryId,title,content});$('message').textContent='Updated memory record.'}
+ else{await api('memory/add',{title,content});$('message').textContent='Saved memory record.'}
+ editingMemoryId=null;$('memoryTitle').value='';$('memoryContent').value='';await loadMemory();
+});
+$('cancelMemory').onclick=()=>{editingMemoryId=null;$('memoryTitle').value='';$('memoryContent').value=''};
+
+async function loadSources(){
+ let d=await (await fetch('/api/sources')).json();
+ $('sourcesLock').textContent=d.corpus_locked?'CORPUS LOCKED':'CORPUS OPEN';
+ let list=$('sourceList');
+ if(!d.sources||!d.sources.length){list.innerHTML='<p class="empty">No sources yet.</p>';return}
+ list.innerHTML=d.sources.map(s=>`<div class="item"><div class="top"><span class="name">${esc(s.name)}</span><span class="meta">${(s.bytes/1024).toFixed(1)} KB</span></div><div class="actions"><button class="secondary" data-edit="${esc(s.name)}">Edit</button><button class="secondary" data-del="${esc(s.name)}" ${d.corpus_locked?'disabled':''}>Delete</button></div></div>`).join('');
+ list.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>action(async()=>{let t=await api('sources/read',{name:b.dataset.edit});$('sourceName').value=b.dataset.edit;$('sourceText').value=t.text;$('sourceForm').open=true;$('sourceName').scrollIntoView({block:'center',behavior:'smooth'})}));
+ list.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>action(async()=>{if(!confirm('Delete this source file?'))return;await api('sources/delete',{name:b.dataset.del});$('message').textContent='Deleted source.';await loadSources()}));
+}
+$('saveSource').onclick=()=>action(async()=>{
+ let name=$('sourceName').value.trim();
+ if(!name)throw Error('Name the source before saving.');
+ await api('sources/save',{name,text:$('sourceText').value});
+ $('message').textContent=`Saved source "${name}".`;
+ $('sourceName').value='';$('sourceText').value='';await loadSources();
+});
+$('cancelSource').onclick=()=>{$('sourceName').value='';$('sourceText').value=''};
+$('compileSources').onclick=()=>action(async()=>{
+ let d=await api('sources/compile',{});
+ $('message').textContent=`Compiled ${d.bytes.toLocaleString()} bytes into data/training.txt.`;
+ await loadSources();
+});
+loadMemory();loadSources();
+</script></html>

@@ -1,0 +1,37 @@
+program: train.py
+project: aven-1
+method: bayes
+metric:
+  name: perplexity/held_out
+  goal: minimize
+parameters:
+  lr:
+    distribution: log_uniform_values
+    min: 0.00005
+    max: 0.003
+  dropout:
+    distribution: uniform
+    min: 0.0
+    max: 0.3
+  batch-size:
+    values: [4, 8, 16]
+command:
+  - .venv/bin/python
+  - train.py
+  - --sweep
+  - --wandb
+  - --data
+  - data/instructions.txt
+  - --tokenizer-path
+  - checkpoints/tokenizer.json
+  - --steps
+  - "150"
+  - --width
+  - "128"
+  - --layers
+  - "2"
+  - --heads
+  - "4"
+  - --context
+  - "64"
+  - ${args}

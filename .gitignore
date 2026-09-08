@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+.DS_Store
+.claude/
+checkpoints/
+checkpoints-*/
+work/
+data/training.txt
+data/instructions.txt
+data/sources/
+memory.db
+wandb/
+sweeps/
