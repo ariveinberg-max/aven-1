@@ -13,6 +13,7 @@ import memory
 import sources
 import preferences
 import random
+from tools.calculator import answer_arithmetic
 
 ROOT = Path(__file__).resolve().parent
 LOCK = threading.Lock()
@@ -183,6 +184,14 @@ class Handler(BaseHTTPRequestHandler):
                     elif m.get('role') == 'assistant':
                         parts.append(f'### Response:\n{content}\n<|end|>\n\n')
                 last_content = str(messages[-1].get('content', ''))[:2000]
+                tool_reply = answer_arithmetic(last_content)
+                if tool_reply is not None:
+                    # Arithmetic is a documented model-level weakness (see
+                    # WRITEUP.md, "Small models memorize arithmetic; they
+                    # don't compute it") -- answer with real computation
+                    # instead of the model's unreliable pattern-matched guess.
+                    self.reply({'reply': tool_reply, 'activity': [], 'step': saved['step'], 'tool': 'calculator'})
+                    return
                 prompt_text = ''.join(parts) + f'### Instruction:\n{last_content}\n\n### Response:\n'
                 model = Brain(Config(**saved['config']))
                 model.load_state_dict(saved['model'])
