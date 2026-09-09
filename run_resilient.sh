@@ -15,6 +15,12 @@
 set -u
 cd "$(dirname "$0")"
 
+if [ -x .venv/bin/python ]; then
+    PYTHON=.venv/bin/python
+else
+    PYTHON="$(command -v python3 || command -v python)"
+fi
+
 MAX_RETRIES="${MAX_RETRIES:-20}"
 BACKOFF_SECONDS="${BACKOFF_SECONDS:-30}"
 LOG_FILE="${LOG_FILE:-run_resilient.log}"
@@ -36,7 +42,7 @@ while true; do
     attempt=$((attempt + 1))
     log "Attempt $attempt/$MAX_RETRIES: python train.py ${args[*]}"
 
-    .venv/bin/python train.py "${args[@]}" 2>&1 | tee -a "$LOG_FILE"
+    "$PYTHON" train.py "${args[@]}" 2>&1 | tee -a "$LOG_FILE"
     code=${PIPESTATUS[0]}
 
     if [ "$code" -eq 0 ]; then
