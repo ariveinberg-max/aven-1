@@ -22,19 +22,23 @@ PORT = 8765
 torch.set_num_threads(4)
 
 PREFERENCE_PROMPTS = [
-    # Mostly identity/greeting/wellbeing/help-style prompts: these were trained with
-    # MULTIPLE valid replies each (not one canned answer per exact question, unlike the
-    # fallback category), so sampling genuinely picks between different coherent, correct
-    # phrasings — real judgment calls, not noise. A few short opinion/hypothetical prompts
-    # mixed in for harder cases. Long-form requests (stories, poems) are deliberately
-    # excluded: this model was only ever fine-tuned on 1-2 sentence responses, so anything
-    # asking for extended prose is past its actual ceiling and just produces noise.
-    'Introduce yourself', 'Who are you?', 'Tell me about yourself', 'What kind of AI are you?',
-    'Hello!', 'Hey there', 'Good morning', 'How are you doing?', "How's it going?",
-    'Thank you', 'Thanks for the help', 'Can you help me?', 'I have a question',
-    'Goodbye', 'See you later',
-    'What do you think about school?', 'What makes a good friend?',
-    'Would you rather be invisible or be able to fly?', 'Is it better to be cautious or take risks?',
+    # Re-tested 2026-09-09 against the current 58.4M-param finetune (see WRITEUP.md).
+    # Two live 0.5/0.9-temperature runs of the full old list showed the tie rate had
+    # dropped from 86% (old 19.8M model) to ~53%, but not because every prompt got
+    # better: some (identity/farewell prompts like 'Introduce yourself', 'Who are you?',
+    # 'Can you help me?', 'Goodbye', 'See you later', 'What do you think about school?',
+    # 'How are you doing?') now have ONE dominant canned phrasing and tied in both runs
+    # -- dropped, same over-drilled-category problem as arithmetic/antonyms before.
+    # Others ('Hey there', 'Would you rather be invisible or be able to fly?', 'Is it
+    # better to be cautious or take risks?') did vary across temperatures, but into
+    # incoherent non-sequiturs ("There are twelve months in a year.", "a bednac") rather
+    # than genuinely different valid answers -- that's noise, not preference signal, so
+    # dropped too. What's left is the prompts that showed real, coherent multi-reply
+    # variance in both test runs.
+    'Tell me about yourself', 'What kind of AI are you?',
+    'Hello!', 'Good morning', "How's it going?",
+    'Thank you', 'Thanks for the help', 'I have a question',
+    'What makes a good friend?',
 ]
 
 
