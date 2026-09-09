@@ -44,11 +44,10 @@ def main():
     parser.add_argument('--batch-size', type=int, default=8)
     parser.add_argument('--device', choices=['cpu', 'mps', 'cuda'], default=device_name())
     parser.add_argument('--resume', action='store_true')
-    parser.add_argument('--vocab', type=int, default=2048, help='BPE vocabulary size for a fresh run (ignored on --resume)')
-    parser.add_argument('--width', type=int, default=Config().width, help='Hidden width for a fresh run (ignored on --resume)')
-    parser.add_argument('--layers', type=int, default=Config().layers, help='Transformer blocks for a fresh run (ignored on --resume)')
-    parser.add_argument('--heads', type=int, default=Config().heads, help='Attention heads for a fresh run (ignored on --resume)')
-    parser.add_argument('--context', type=int, default=Config().context, help='Context length in tokens for a fresh run (ignored on --resume)')
+    parser.add_argument('--expect-params', type=int, help='Require this parameter count when resuming or fine-tuning a checkpoint')
+    for field in ('vocab', 'width', 'layers', 'heads', 'context'):
+        parser.add_argument(f'--{field}', type=int, default=None,
+                            help=f'{field} for a fresh run; if explicitly passed on resume/finetune, must match saved config')
     parser.add_argument('--finetune', action='store_true',
                          help='Continue an existing checkpoint on a new corpus (e.g. instruction data) instead of raw pretraining text. Reuses weights and tokenizer; deliberately skips the corpus-match check.')
     parser.add_argument('--wandb', action='store_true',
@@ -65,26 +64,20 @@ def main():
     args = parser.parse_args()
     if not 1 <= args.steps <= 10000 or not 1 <= args.batch_size <= 32:
         parser.error('Steps must be 1–10000 and batch size 1–32.')
-    if not 256 <= args.vocab <= 16384:
-        parser.error('Vocab size must be 256–16384.')
-    if args.width % args.heads != 0:
-        parser.error('Width must be divisible by heads.')
     if args.dropout is not None and not 0 <= args.dropout < 1:
         parser.error('Dropout must be in [0, 1).')
     if args.sweep:
         args.resume = False
         args.finetune = False
         out = ROOT/'sweeps'/f'run-{time.strftime("%Y%m%d-%H%M%S")}-{__import__("os").getpid()}'
-        out.mkdir(parents=True)
     else:
         out = ROOT/'checkpoints'
-        out.mkdir(exist_ok=True)
     checkpoint = out/'latest.pt'
     tokenizer_path = out/'tokenizer.json'
     if checkpoint.exists() and not args.resume and not args.finetune:
         parser.error('A checkpoint exists. Use --resume, --finetune, or move checkpoints/ to preserve it before starting over.')
-    if args.finetune and not checkpoint.exists():
-        parser.error('--finetune continues an existing checkpoint; none exists yet. Pretrain first.')
+    if (args.resume or args.finetune) and not checkpoint.exists():
+        parser.error('--resume/--finetune requires an existing checkpoint; none exists.')
     torch.set_num_threads(4)
     torch.manual_seed(42)
     raw = args.data.read_bytes()
@@ -93,10 +86,31 @@ def main():
     raw.decode('utf-8')
     fingerprint = hashlib.sha256(raw).hexdigest()
     saved = torch.load(checkpoint, map_location='cpu', weights_only=True) if (args.resume or args.finetune) and checkpoint.exists() else None
+    if saved:
+        # Brain ties output.weight to token.weight; count that parameter only once.
+        saved_params = sum(value.numel() for name, value in saved['model'].items()
+                           if name != 'output.weight')
+        if args.expect_params is not None and args.expect_params != saved_params:
+            parser.error(f'--expect-params mismatch: expected {args.expect_params}, checkpoint has {saved_params} parameters.')
+        for field in ('width', 'layers', 'heads', 'context', 'vocab'):
+            explicit = getattr(args, field)
+            actual = saved['config'].get(field)
+            if explicit is not None and explicit != actual:
+                parser.error(f'--{field} mismatch: requested {explicit}, checkpoint has {actual}.')
+            setattr(args, field, actual)
+    else:
+        for field in ('width', 'layers', 'heads', 'context', 'vocab'):
+            if getattr(args, field) is None:
+                setattr(args, field, 2048 if field == 'vocab' else getattr(Config(), field))
+    if not 256 <= args.vocab <= 16384:
+        parser.error('Vocab size must be 256–16384.')
+    if args.heads <= 0 or args.width <= 0 or args.width % args.heads != 0:
+        parser.error('Width and heads must be positive; width must be divisible by heads.')
     if saved and not args.finetune and saved['data_sha256'] != fingerprint:
         parser.error('The corpus changed. Preserve the old checkpoints/ folder and start a new run, or pass --finetune if this is deliberate.')
     if args.finetune and saved['data_sha256'] == fingerprint and saved.get('stage') == 'finetune':
         args.finetune = False  # same corpus as last time: this is really just a --resume of the finetune run
+    out.mkdir(parents=True, exist_ok=True)
     tok = Tokenizer()
     if saved:
         if not tokenizer_path.exists():
