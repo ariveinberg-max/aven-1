@@ -9,6 +9,7 @@ data/training.txt
 data/instructions.txt
 data/raft.txt
 data/sources/
+!data/eval-heldout/
 memory.db
 preferences.db
 wandb/
