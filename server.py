@@ -23,22 +23,18 @@ torch.set_num_threads(4)
 
 PREFERENCE_PROMPTS = [
     # Re-tested 2026-09-09 against the current 58.4M-param finetune (see WRITEUP.md).
-    # Two live 0.5/0.9-temperature runs of the full old list showed the tie rate had
-    # dropped from 86% (old 19.8M model) to ~53%, but not because every prompt got
-    # better: some (identity/farewell prompts like 'Introduce yourself', 'Who are you?',
-    # 'Can you help me?', 'Goodbye', 'See you later', 'What do you think about school?',
-    # 'How are you doing?') now have ONE dominant canned phrasing and tied in both runs
-    # -- dropped, same over-drilled-category problem as arithmetic/antonyms before.
-    # Others ('Hey there', 'Would you rather be invisible or be able to fly?', 'Is it
-    # better to be cautious or take risks?') did vary across temperatures, but into
-    # incoherent non-sequiturs ("There are twelve months in a year.", "a bednac") rather
-    # than genuinely different valid answers -- that's noise, not preference signal, so
-    # dropped too. What's left is the prompts that showed real, coherent multi-reply
-    # variance in both test runs.
-    'Tell me about yourself', 'What kind of AI are you?',
-    'Hello!', 'Good morning', "How's it going?",
-    'Thank you', 'Thanks for the help', 'I have a question',
-    'What makes a good friend?',
+    # The prior list (kept 2026-09-09 earlier same day) still tied heavily live --
+    # including a prompt ('What makes a good friend?') that isn't from any real
+    # trained category at all, so it has zero learned response variety and just
+    # falls back to generic boilerplate regardless of temperature. The actual fix:
+    # pull prompts ONLY from make_instructions.py categories that were trained with
+    # genuinely multiple canned replies (GREETING_REPLIES: 5, IDENTITY_REPLIES: 3,
+    # FAREWELL_REPLIES: 4, THANKS_REPLIES: 4) -- WELLBEING/HELP (only 2-3 replies
+    # each) and any prompt outside these six categories collapse too easily.
+    'Hello!', 'Hi there', 'Good morning', "What's up?", 'Greetings',
+    'Who are you?', 'What are you?', 'Tell me about yourself', 'Are you ChatGPT?',
+    'Goodbye', 'Bye', "That's all, bye",
+    'Thank you', 'Thanks a lot', 'I appreciate it',
 ]
 
 
