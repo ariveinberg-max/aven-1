@@ -1,11 +1,13 @@
 """Bounded training with held-out evaluation, atomic saves, and resumable AdamW."""
 import argparse
+import codecs
 from dataclasses import asdict
 import hashlib
 import json
 import math
 import uuid
 import platform
+import numpy as np
 from tracking import prediction_metrics, memory_metrics, diagnostics
 from pathlib import Path
 import signal
@@ -31,10 +33,60 @@ def atomic_json(path, obj):
 
 
 def batch(data, size, context, device, generator=None):
-    starts = torch.randint(len(data)-context, (size,), generator=generator)
-    x = torch.stack([data[i:i+context] for i in starts])
-    y = torch.stack([data[i+1:i+context+1] for i in starts])
+    """data may be a torch tensor (tests, small in-memory corpora) or a numpy
+    memmap (real training -- see the streaming pipeline in main()); as_tensor
+    handles either uniformly without loading the whole backing store."""
+    starts = torch.randint(len(data)-context, (size,), generator=generator).tolist()
+    if torch.is_tensor(data):
+        x = torch.stack([data[i:i+context].to(torch.long) for i in starts])
+        y = torch.stack([data[i+1:i+context+1].to(torch.long) for i in starts])
+    else:
+        # np.array() copies -- trivial cost for one context-length window,
+        # but avoids writing through to the on-disk memmap cache.
+        x = torch.stack([torch.from_numpy(np.array(data[i:i+context])).long() for i in starts])
+        y = torch.stack([torch.from_numpy(np.array(data[i+1:i+context+1])).long() for i in starts])
     return x.to(device), y.to(device)
+
+
+def stream_fingerprint_and_validate(path, chunk_size=8 * 1024 * 1024):
+    """Stream-hash a corpus file (sha256) and validate it's real UTF-8,
+    without loading it into memory -- needed once a corpus reaches hundreds
+    of MB or more (a full read_bytes()+decode() would itself use as much RAM
+    as the file is large, on top of everything else)."""
+    digest = hashlib.sha256()
+    decoder = codecs.getincrementaldecoder('utf-8')()
+    with path.open('rb') as f:
+        for chunk in iter(lambda: f.read(chunk_size), b''):
+            digest.update(chunk)
+            try:
+                decoder.decode(chunk)
+            except UnicodeDecodeError as e:
+                raise ValueError(f'Corpus is not valid UTF-8: {e}')
+        decoder.decode(b'', final=True)
+    return digest.hexdigest()
+
+
+TOKENIZER_TRAIN_SAMPLE_BYTES = 20_000_000  # bounded sample for BPE merge learning on huge corpora
+ENCODE_CHUNK_BYTES = 8 * 1024 * 1024
+
+
+def encode_corpus_to_cache(data_path, tok, cache_path, chunk_size=ENCODE_CHUNK_BYTES):
+    """Stream-encode a corpus to a token-ID cache file on disk (uint16,
+    since vocab is capped at 16384) and return the total token count,
+    without ever holding the full token array in memory. Chunk boundaries
+    (every chunk_size bytes) mean a handful of merges that would span a
+    boundary are missed -- a small, accepted imprecision, same tradeoff most
+    streaming tokenizers make; on a real corpus this affects a negligible
+    fraction of tokens."""
+    tmp = cache_path.with_suffix('.tmp')
+    token_count = 0
+    with data_path.open('rb') as f, open(tmp, 'wb') as out_f:
+        for chunk in iter(lambda: f.read(chunk_size), b''):
+            ids = tok.encode_ids(chunk)
+            np.asarray(ids, dtype=np.uint16).tofile(out_f)
+            token_count += len(ids)
+    tmp.replace(cache_path)
+    return token_count
 
 
 def main():
@@ -80,11 +132,13 @@ def main():
         parser.error('--resume/--finetune requires an existing checkpoint; none exists.')
     torch.set_num_threads(4)
     torch.manual_seed(42)
-    raw = args.data.read_bytes()
-    if len(raw) < 4096 or len(raw) > 20_000_000:
-        parser.error('Use a UTF-8 text corpus between 4 KB and 20 MB for this starter.')
-    raw.decode('utf-8')
-    fingerprint = hashlib.sha256(raw).hexdigest()
+    data_size = args.data.stat().st_size
+    if data_size < 4096:
+        parser.error('Use a UTF-8 text corpus of at least 4 KB.')
+    try:
+        fingerprint = stream_fingerprint_and_validate(args.data)
+    except ValueError as e:
+        parser.error(str(e))
     saved = None
     parent_checkpoint_sha256 = None
     if args.resume or args.finetune:
@@ -134,21 +188,26 @@ def main():
     else:
         print(f'Training a byte-pair tokenizer (target vocab {args.vocab})…', flush=True)
         start_tok = time.monotonic()
-        tok.train(raw, args.vocab)
+        with args.data.open('rb') as f:
+            sample = f.read(TOKENIZER_TRAIN_SAMPLE_BYTES)
+        tok.train(sample, args.vocab)
         tok.save(tokenizer_path)
         print(f'Tokenizer ready: {tok.vocab_size} tokens in {time.monotonic()-start_tok:.1f}s', flush=True)
-    cache_path = ROOT/'sweeps/cache'/f'{fingerprint[:16]}-{tok.vocab_size}.pt'
-    if args.sweep and cache_path.exists():
-        ids = torch.load(cache_path, weights_only=True).tolist()
+    cache_dir = ROOT/'data/.cache'
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    token_cache_path = cache_dir/f'{fingerprint[:16]}-{tok.vocab_size}.bin'
+    if token_cache_path.exists():
+        token_count = token_cache_path.stat().st_size // 2  # uint16 = 2 bytes/token
+        print(f'Reusing cached token encoding ({token_count:,} tokens).', flush=True)
     else:
-        ids = tok.encode_ids(raw)
-        if args.sweep:
-            cache_path.parent.mkdir(parents=True, exist_ok=True)
-            torch.save(torch.tensor(ids, dtype=torch.long), cache_path)
-    print(f'Corpus: {len(raw):,} bytes -> {len(ids):,} tokens ({len(raw)/max(len(ids),1):.2f} bytes/token)', flush=True)
-    if len(ids) < 512:
+        print('Encoding corpus to tokens…', flush=True)
+        start_enc = time.monotonic()
+        token_count = encode_corpus_to_cache(args.data, tok, token_cache_path)
+        print(f'Encoded in {time.monotonic()-start_enc:.1f}s', flush=True)
+    print(f'Corpus: {data_size:,} bytes -> {token_count:,} tokens ({data_size/max(token_count,1):.2f} bytes/token)', flush=True)
+    if token_count < 512:
         parser.error('Too few tokens after encoding for a useful context window; add more training text.')
-    data = torch.tensor(ids, dtype=torch.long)
+    data = np.memmap(token_cache_path, dtype=np.uint16, mode='r', shape=(token_count,))
     split = int(len(data)*0.9)
     training, validation = data[:split], data[split:]
     model = Brain(Config(**saved['config']) if saved else
@@ -196,8 +255,8 @@ def main():
                       lineage_id=lineage_id, platform=args.device,
                       starting_step=saved['step'] if saved else 0)
     run_config = dict(stage=stage, dataset=args.data.name, parameters=params, lr=args.lr,
-                       batch_size=args.batch_size, data_bytes=len(raw), token_count=len(ids),
-                       bytes_per_token=round(len(raw)/max(len(ids), 1), 3), **asdict(model.config))
+                       batch_size=args.batch_size, data_bytes=data_size, token_count=token_count,
+                       bytes_per_token=round(data_size/max(token_count, 1), 3), **asdict(model.config))
     run_config.update(provenance)
     run_config.update(device=args.device, torch_version=str(torch.__version__), python_version=platform.python_version(), seed=42,
                       data_sha256=fingerprint, train_tokens=len(training), validation_tokens=len(validation),
@@ -219,8 +278,8 @@ def main():
         sample_prompts = ['Hello!', 'What is 6 plus 7?', 'What is the opposite of fast?',
                            'What day comes after Friday?', 'Introduce yourself']
     state = dict(status='training', step=step, target=target, parameters=params, device=args.device,
-                 data_bytes=len(raw), token_count=len(ids), vocab=tok.vocab_size,
-                 bytes_per_token=round(len(raw)/max(len(ids), 1), 3), stage=stage, run_id=run_id,
+                 data_bytes=data_size, token_count=token_count, vocab=tok.vocab_size,
+                 bytes_per_token=round(data_size/max(token_count, 1), 3), stage=stage, run_id=run_id,
                  history=history, elapsed=0, dataset=args.data.name, **provenance)
     def perplexity(loss):
         return round(math.exp(min(loss, 20)), 2)

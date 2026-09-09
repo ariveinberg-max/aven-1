@@ -6,6 +6,7 @@ here on whatever text you compile into the corpus. A trained tokenizer is
 tied to the corpus it learned from and is saved next to the checkpoint that
 uses it.
 """
+import heapq
 import json
 
 
@@ -69,11 +70,61 @@ class Tokenizer:
         return ids
 
     def encode_ids(self, raw_bytes):
-        """Encode already-decoded bytes (e.g. a whole corpus) without a utf-8 round trip."""
+        """Encode already-decoded bytes (e.g. a whole corpus) without a utf-8 round trip.
+
+        O(n log n): a min-heap over adjacent mergeable pairs (keyed by merge
+        rank, i.e. learned order) with a doubly linked list for O(1) splicing
+        and lazy invalidation of stale heap entries, instead of one full pass
+        over the whole sequence per learned merge rule (O(n * num_merges) --
+        impractical once a corpus reaches tens of MB, since num_merges is
+        typically ~1800 and each pass previously re-scanned everything).
+        Produces identical output to the sequential full-pass approach --
+        applying merges in a global priority order with correct adjacency
+        tracking is the standard efficient equivalent of applying each merge
+        rule as a separate full pass in the same order.
+        """
+        n = len(raw_bytes)
+        if n < 2:
+            return list(raw_bytes)
         ids = list(raw_bytes)
-        for pair, idx in sorted(self.merges.items(), key=lambda kv: kv[1]):
-            ids = self._merge(ids, pair, idx)
-        return ids
+        nxt = list(range(1, n)) + [-1]
+        prv = list(range(-1, n - 1))
+        alive = [True] * n
+        heap = []
+
+        def push(i):
+            j = nxt[i]
+            if j == -1:
+                return
+            rank = self.merges.get((ids[i], ids[j]))
+            if rank is not None:
+                heapq.heappush(heap, (rank, i, ids[i], ids[j]))
+
+        for i in range(n - 1):
+            push(i)
+        while heap:
+            rank, i, a, b = heapq.heappop(heap)
+            if not alive[i]:
+                continue
+            j = nxt[i]
+            if j == -1 or ids[i] != a or ids[j] != b:
+                continue  # stale entry: this position's pair already changed
+            ids[i] = rank
+            k = nxt[j]
+            nxt[i] = k
+            if k != -1:
+                prv[k] = i
+            alive[j] = False
+            p = prv[i]
+            if p != -1:
+                push(p)
+            push(i)
+        out = []
+        i = 0
+        while i != -1:
+            out.append(ids[i])
+            i = nxt[i]
+        return out
 
     def decode(self, ids):
         return b''.join(self.vocab[i] for i in ids).decode('utf-8', errors='replace')
