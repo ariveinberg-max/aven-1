@@ -65,8 +65,8 @@ def compile_corpus():
     raw = combined.encode('utf-8')
     if len(raw) < 4096:
         raise ValueError('Combined sources must total at least 4 KB (roughly 700-1000 words).')
-    if len(raw) > 200_000_000:
-        raise ValueError('Combined sources exceed the 200 MB limit.')
+    if len(raw) > 2_000_000_000:
+        raise ValueError('Combined sources exceed the 2 GB limit.')
     ROOT.joinpath('data').mkdir(exist_ok=True)
     CORPUS_PATH.write_bytes(raw)
     return len(raw)
