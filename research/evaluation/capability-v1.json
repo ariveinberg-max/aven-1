@@ -1,0 +1,275 @@
+{
+  "version": "capability-v1",
+  "cases": [
+    {
+      "id": "comprehension-01",
+      "category": "comprehension",
+      "prompt": "Mira put a copper key in a blue box. She put a silver key in a red box. What color box contains the copper key? Answer one word.",
+      "answers": [
+        "blue"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "comprehension-02",
+      "category": "comprehension",
+      "prompt": "Lio arrived before Sena. Sena arrived before Omi. Who arrived last? Answer only the name.",
+      "answers": [
+        "Omi"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "comprehension-03",
+      "category": "comprehension",
+      "prompt": "The parcel weighs 4 kilograms. Its empty container weighs 1 kilogram. What is the weight of the contents in kilograms? Answer a number.",
+      "answers": [
+        "3"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "comprehension-04",
+      "category": "comprehension",
+      "prompt": "Nera has a cat named Pip and a dog named Sol. Which animal is Sol? Answer one word.",
+      "answers": [
+        "dog"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "comprehension-05",
+      "category": "comprehension",
+      "prompt": "A shop is closed on Tuesday and open on Wednesday. Is it open on Tuesday? Answer yes or no.",
+      "answers": [
+        "no"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "comprehension-06",
+      "category": "comprehension",
+      "prompt": "Tavi moved the marble from a cup into a drawer, then moved the empty cup to a shelf. Where is the marble? Answer one word.",
+      "answers": [
+        "drawer"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "instructions-07",
+      "category": "instructions",
+      "prompt": "Write only the word amber.",
+      "answers": [
+        "amber"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "instructions-08",
+      "category": "instructions",
+      "prompt": "Return the last word in this list: stone, river, cloud.",
+      "answers": [
+        "cloud"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "instructions-09",
+      "category": "instructions",
+      "prompt": "Write the word quiet in uppercase. Output nothing else.",
+      "answers": [
+        "QUIET"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "instructions-10",
+      "category": "instructions",
+      "prompt": "Reverse the letters in lamp. Output only the result.",
+      "answers": [
+        "pmal"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "instructions-11",
+      "category": "instructions",
+      "prompt": "From pear, plum, fig, return only the word with three letters.",
+      "answers": [
+        "fig"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "instructions-12",
+      "category": "instructions",
+      "prompt": "Output exactly: red|blue",
+      "answers": [
+        "red|blue"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "arithmetic-13",
+      "category": "arithmetic",
+      "prompt": "What is 17 + 26? Answer only the integer.",
+      "answers": [
+        "43"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "arithmetic-14",
+      "category": "arithmetic",
+      "prompt": "What is 91 - 37? Answer only the integer.",
+      "answers": [
+        "54"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "arithmetic-15",
+      "category": "arithmetic",
+      "prompt": "What is 8 * 7? Answer only the integer.",
+      "answers": [
+        "56"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "arithmetic-16",
+      "category": "arithmetic",
+      "prompt": "What is 84 / 7? Answer only the integer.",
+      "answers": [
+        "12"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "arithmetic-17",
+      "category": "arithmetic",
+      "prompt": "What is 3 * (4 + 5)? Answer only the integer.",
+      "answers": [
+        "27"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "arithmetic-18",
+      "category": "arithmetic",
+      "prompt": "What is 144 - 59? Answer only the integer.",
+      "answers": [
+        "85"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "facts-19",
+      "category": "facts",
+      "prompt": "Which planet is closest to the Sun? Answer only its name.",
+      "answers": [
+        "Mercury"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "facts-20",
+      "category": "facts",
+      "prompt": "How many sides does a triangle have? Answer a number.",
+      "answers": [
+        "3"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "facts-21",
+      "category": "facts",
+      "prompt": "What is the chemical symbol for oxygen? Answer only the symbol.",
+      "answers": [
+        "O"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "facts-22",
+      "category": "facts",
+      "prompt": "What is the capital of France? Answer only the city.",
+      "answers": [
+        "Paris"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "facts-23",
+      "category": "facts",
+      "prompt": "How many minutes are in an hour? Answer a number.",
+      "answers": [
+        "60"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "facts-24",
+      "category": "facts",
+      "prompt": "What organ pumps blood around the human body? Answer one word.",
+      "answers": [
+        "heart"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "code_reading-25",
+      "category": "code_reading",
+      "prompt": "Python: x = [2, 5, 8]; print(x[1])\nWhat is printed? Output only the value.",
+      "answers": [
+        "5"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "code_reading-26",
+      "category": "code_reading",
+      "prompt": "Python: print(sum([3, 4, 6]))\nWhat is printed? Output only the value.",
+      "answers": [
+        "13"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "code_reading-27",
+      "category": "code_reading",
+      "prompt": "Python: print(len(\"orbit\"))\nWhat is printed? Output only the value.",
+      "answers": [
+        "5"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "code_reading-28",
+      "category": "code_reading",
+      "prompt": "Python: print(7 // 2)\nWhat is printed? Output only the value.",
+      "answers": [
+        "3"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "code_reading-29",
+      "category": "code_reading",
+      "prompt": "Python: print(\"cat\"[::-1])\nWhat is printed? Output only the value.",
+      "answers": [
+        "tac"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    },
+    {
+      "id": "code_reading-30",
+      "category": "code_reading",
+      "prompt": "Python: print(list(range(3)))\nWhat is printed? Output only the value.",
+      "answers": [
+        "[0, 1, 2]"
+      ],
+      "provenance": "Original evaluation item authored for Aven capability-v1; not a published benchmark."
+    }
+  ]
+}
