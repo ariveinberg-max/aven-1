@@ -83,6 +83,67 @@ class ResumeTests(unittest.TestCase):
         self.invoke(*args)
         self.assertEqual(torch.load(self.checkpoint, weights_only=True)['step'], 2)
 
+    def test_distinct_execution_ids_and_legacy_lineage(self):
+        # Simulate two independent continuations of the SAME old checkpoint.
+        legacy = dict(self.saved)
+        legacy.pop('lineage_id', None)
+        torch.save(legacy, self.checkpoint)
+        parent_bytes = self.checkpoint.read_bytes()
+        parent_hash = hashlib.sha256(parent_bytes).hexdigest()
+        ids = []
+        for _ in range(2):
+            self.checkpoint.write_bytes(parent_bytes)
+            run = Mock(url='offline test', summary={})
+            fake = types.SimpleNamespace(init=Mock(return_value=run), watch=Mock())
+            with patch.dict(sys.modules, {'wandb': fake}):
+                output = self.invoke('--resume', '--wandb')
+            kwargs = fake.init.call_args.kwargs
+            config = kwargs['config']
+            ids.append(kwargs['id'])
+            self.assertNotEqual(kwargs['id'], legacy['run_id'])
+            self.assertEqual(kwargs['resume'], 'never')
+            self.assertEqual(kwargs['group'], legacy['run_id'])
+            self.assertIn(legacy['run_id'], kwargs['tags'])
+            self.assertEqual(config['lineage_id'], legacy['run_id'])
+            self.assertEqual(config['parent_checkpoint_sha256'], parent_hash)
+            self.assertEqual(config['starting_step'], 1)
+            self.assertEqual(config['platform'], 'cpu')
+            after = torch.load(self.checkpoint, weights_only=True)
+            self.assertEqual(after['lineage_id'], legacy['run_id'])
+            self.assertEqual(after['run_id'], kwargs['id'])
+            self.assertEqual(after['step'], 2)
+        self.assertNotEqual(*ids)
+        # A subsequent resume carries the lineage, rather than its parent's execution ID.
+        self.invoke('--resume')
+        after = torch.load(self.checkpoint, weights_only=True)
+        self.assertEqual(after['lineage_id'], legacy['run_id'])
+        self.assertNotIn(after['run_id'], ids)
+        print('PASS sibling resumes: distinct execution IDs; shared legacy lineage/group/tag; exact parent SHA; starting_step=1; platform=cpu')
+
+    def test_legacy_without_any_id_gets_stable_lineage(self):
+        legacy = dict(self.saved)
+        legacy.pop('lineage_id', None)
+        legacy.pop('run_id', None)
+        torch.save(legacy, self.checkpoint)
+        source = self.checkpoint.read_bytes()
+        lineages = []
+        for _ in range(2):
+            self.checkpoint.write_bytes(source)
+            self.invoke('--resume')
+            lineages.append(torch.load(self.checkpoint, weights_only=True)['lineage_id'])
+        self.assertTrue(lineages[0].startswith('lineage-'))
+        self.assertEqual(*lineages)
+
+    def test_finetune_keeps_parent_lineage_and_step(self):
+        self.data.write_text('A different real fine tuning corpus for testing.\n' * 120)
+        self.invoke('--finetune')
+        after = torch.load(self.checkpoint, weights_only=True)
+        self.assertEqual(after['stage'], 'finetune')
+        self.assertEqual(after['starting_step'], self.saved['step'])
+        self.assertEqual(after['lineage_id'], self.saved['lineage_id'])
+        self.assertNotEqual(after['run_id'], self.saved['run_id'])
+        self.assertEqual(after['step'], 1)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

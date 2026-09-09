@@ -85,7 +85,17 @@ def main():
         parser.error('Use a UTF-8 text corpus between 4 KB and 20 MB for this starter.')
     raw.decode('utf-8')
     fingerprint = hashlib.sha256(raw).hexdigest()
-    saved = torch.load(checkpoint, map_location='cpu', weights_only=True) if (args.resume or args.finetune) and checkpoint.exists() else None
+    saved = None
+    parent_checkpoint_sha256 = None
+    if args.resume or args.finetune:
+        # Hash and load the same open file even if another process replaces its path.
+        with checkpoint.open('rb') as source:
+            digest = hashlib.sha256()
+            for chunk in iter(lambda: source.read(8 * 1024 * 1024), b''):
+                digest.update(chunk)
+            parent_checkpoint_sha256 = digest.hexdigest()
+            source.seek(0)
+            saved = torch.load(source, map_location='cpu', weights_only=True)
     if saved:
         # Brain ties output.weight to token.weight; count that parameter only once.
         saved_params = sum(value.numel() for name, value in saved['model'].items()
@@ -176,15 +186,19 @@ def main():
     signal.signal(signal.SIGINT, request_stop)
     start, target = time.monotonic(), step+args.steps
     params = sum(p.numel() for p in model.parameters())
-    if args.sweep:
-        run_id = f'sweep-{fingerprint[:6]}-lr{args.lr:g}-do{model.config.dropout:g}-bs{args.batch_size}-{__import__("os").getpid()}'
-    elif saved and saved.get('run_id') and not entering_finetune:
-        run_id = saved['run_id']  # keep the same W&B line across resumes of the same logical run
-    else:
-        run_id = f'{stage}-{fingerprint[:8]}-{uuid.uuid4().hex[:8]}'
+    run_id = f'{stage}-{fingerprint[:8]}-{uuid.uuid4().hex}'
+    # Older checkpoints have only run_id. Siblings from the same legacy parent
+    # must still share a lineage even though each execution gets a new run ID.
+    lineage_id = ((saved.get('lineage_id') or saved.get('run_id') or
+                   f'lineage-{uuid.uuid5(uuid.NAMESPACE_URL, parent_checkpoint_sha256).hex}')
+                  if saved else run_id)
+    provenance = dict(parent_checkpoint_sha256=parent_checkpoint_sha256,
+                      lineage_id=lineage_id, platform=args.device,
+                      starting_step=saved['step'] if saved else 0)
     run_config = dict(stage=stage, dataset=args.data.name, parameters=params, lr=args.lr,
                        batch_size=args.batch_size, data_bytes=len(raw), token_count=len(ids),
                        bytes_per_token=round(len(raw)/max(len(ids), 1), 3), **asdict(model.config))
+    run_config.update(provenance)
     run_config.update(device=args.device, torch_version=str(torch.__version__), python_version=platform.python_version(), seed=42,
                       data_sha256=fingerprint, train_tokens=len(training), validation_tokens=len(validation),
                       optimizer='AdamW', weight_decay=0.01, grad_clip=1.0, evaluation_batches=4,
@@ -194,7 +208,7 @@ def main():
     wandb_run = None
     if args.wandb:
         import wandb
-        wandb_run = wandb.init(project=args.wandb_project, entity=args.wandb_entity, id=run_id, name=run_id, resume='allow', config=run_config, allow_val_change=True, save_code=False)
+        wandb_run = wandb.init(project=args.wandb_project, entity=args.wandb_entity, id=run_id, name=run_id, resume='never', group=lineage_id, tags=[lineage_id], config=run_config, save_code=False)
         wandb_run.define_metric('step')
         wandb_run.define_metric('*', step_metric='step')
         wandb_run.define_metric('loss/held_out', summary='min')
@@ -207,7 +221,7 @@ def main():
     state = dict(status='training', step=step, target=target, parameters=params, device=args.device,
                  data_bytes=len(raw), token_count=len(ids), vocab=tok.vocab_size,
                  bytes_per_token=round(len(raw)/max(len(ids), 1), 3), stage=stage, run_id=run_id,
-                 history=history, elapsed=0, dataset=args.data.name)
+                 history=history, elapsed=0, dataset=args.data.name, **provenance)
     def perplexity(loss):
         return round(math.exp(min(loss, 20)), 2)
     eval_metrics = {}
@@ -231,7 +245,7 @@ def main():
         tmp = out/'latest.tmp'
         torch.save(dict(config=asdict(model.config), model=model.state_dict(), optimizer=optimizer.state_dict(),
                         step=step, history=history, data_sha256=fingerprint, rng=torch.get_rng_state(),
-                        stage=stage, dataset=args.data.name, run_id=run_id), tmp)
+                        stage=stage, dataset=args.data.name, run_id=run_id, **provenance), tmp)
         tmp.replace(checkpoint)
     if not history:
         v = evaluate()
@@ -314,7 +328,7 @@ def main():
         atomic_json(out/'status.json', state)
         if wandb_run:
             wandb_run.summary.update({'status': state['status'], 'final_step': step, 'final_val_loss': history[-1]['val_loss']})
-        append_ledger(dict(run_id=run_id, stage=stage, dataset=args.data.name, parameters=params,
+        append_ledger(dict(run_id=run_id, **provenance, stage=stage, dataset=args.data.name, parameters=params,
                             vocab=tok.vocab_size, step=step, target=target,
                             final_val_loss=history[-1]['val_loss'], final_perplexity=history[-1]['val_perplexity'],
                             status=state['status'], config=asdict(model.config),
@@ -324,7 +338,7 @@ def main():
         atomic_json(out/'status.json', state)
         if wandb_run:
             wandb_run.summary.update({'status': state['status'], 'final_step': step, 'final_val_loss': history[-1]['val_loss']})
-        append_ledger(dict(run_id=run_id, stage=stage, dataset=args.data.name, parameters=params,
+        append_ledger(dict(run_id=run_id, **provenance, stage=stage, dataset=args.data.name, parameters=params,
                             vocab=tok.vocab_size, step=step, target=target, status='error', error=str(exc),
                             config=asdict(model.config), timestamp=time.strftime('%Y-%m-%dT%H:%M:%S')))
         raise
