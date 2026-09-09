@@ -11,6 +11,13 @@
 # train.py itself rejected the invocation (bad flags, --expect-params
 # mismatch, etc.) — retrying won't fix that, so the wrapper stops instead
 # of silently retrying a broken config forever on a paid GPU.
+#
+# Set CONTINUOUS=1 to keep chaining more --resume chunks after each clean
+# finish (train.py caps --steps at 10000 per invocation) instead of
+# stopping — useful to keep a rented GPU productive for as long as its
+# budget lasts, rather than idling (and still billing) after an early
+# finish. There's no step-count ceiling in this mode; stop it yourself
+# (Ctrl+C, or when the account runs out of funds) once you've had enough.
 
 set -u
 cd "$(dirname "$0")"
@@ -21,6 +28,7 @@ else
     PYTHON="$(command -v python3 || command -v python)"
 fi
 
+CONTINUOUS="${CONTINUOUS:-0}"
 MAX_RETRIES="${MAX_RETRIES:-20}"
 BACKOFF_SECONDS="${BACKOFF_SECONDS:-30}"
 LOG_FILE="${LOG_FILE:-run_resilient.log}"
@@ -46,6 +54,11 @@ while true; do
     code=${PIPESTATUS[0]}
 
     if [ "$code" -eq 0 ]; then
+        if [ "$CONTINUOUS" = "1" ]; then
+            log "Chunk finished cleanly (exit 0). CONTINUOUS=1 — starting another chunk with --resume."
+            args=("${RESUME_ARGS[@]}")
+            continue
+        fi
         log "Finished cleanly (exit 0). Done."
         exit 0
     fi
