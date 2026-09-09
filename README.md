@@ -117,3 +117,8 @@ GPU implementation reference: https://docs.pytorch.org/docs/stable/notes/mps.htm
 ## Next development stages
 
 Improve the corpus and evaluate on a separate, genuinely different text collection. Then work on tokenization, longer context within the memory budget, and dialogue-specific training/evaluation. Vision and audio would need appropriate encoders, datasets, and objectives; actions require a separate tool-control system. Merely increasing the step count on these demo stories will not add those abilities.
+
+
+## Expanded W&B analytics
+
+See WANDB.md for the metric catalog and instructions. Add --wandb to your normal training command; --wandb-samples enables generated-text uploads.

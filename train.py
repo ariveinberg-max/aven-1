@@ -4,6 +4,9 @@ from dataclasses import asdict
 import hashlib
 import json
 import math
+import uuid
+import platform
+from tracking import prediction_metrics, memory_metrics, diagnostics
 from pathlib import Path
 import signal
 import time
@@ -49,7 +52,10 @@ def main():
     parser.add_argument('--finetune', action='store_true',
                          help='Continue an existing checkpoint on a new corpus (e.g. instruction data) instead of raw pretraining text. Reuses weights and tokenizer; deliberately skips the corpus-match check.')
     parser.add_argument('--wandb', action='store_true',
-                         help='Also log this run to Weights & Biases (cloud, free tier). Requires `wandb login` once beforehand. TensorBoard logging always happens locally regardless of this flag.')
+                         help='Log analytics to Weights & Biases. Use WANDB_MODE=offline for local-only logging; online mode requires wandb login.')
+    parser.add_argument('--wandb-project', default='aven-1')
+    parser.add_argument('--wandb-entity', default=None, help='Optional W&B account or team')
+    parser.add_argument('--wandb-samples', action='store_true', help='Log generated text samples, which may reproduce training text')
     parser.add_argument('--lr', type=float, default=3e-4, help='AdamW learning rate. Applies even on --resume/--finetune (overrides the saved optimizer state).')
     parser.add_argument('--dropout', type=float, default=None,
                          help='Dropout. On a fresh run, defaults to 0. On --resume/--finetune, leaves the checkpoint\'s existing dropout untouched unless explicitly passed (safe to change any time — dropout adds no parameters).')
@@ -161,15 +167,26 @@ def main():
     elif saved and saved.get('run_id') and not entering_finetune:
         run_id = saved['run_id']  # keep the same W&B line across resumes of the same logical run
     else:
-        run_id = f'{stage}-{args.data.stem}-{fingerprint[:8]}'
+        run_id = f'{stage}-{fingerprint[:8]}-{uuid.uuid4().hex[:8]}'
     run_config = dict(stage=stage, dataset=args.data.name, parameters=params, lr=args.lr,
                        batch_size=args.batch_size, data_bytes=len(raw), token_count=len(ids),
                        bytes_per_token=round(len(raw)/max(len(ids), 1), 3), **asdict(model.config))
+    run_config.update(device=args.device, torch_version=str(torch.__version__), python_version=platform.python_version(), seed=42,
+                      data_sha256=fingerprint, train_tokens=len(training), validation_tokens=len(validation),
+                      optimizer='AdamW', weight_decay=0.01, grad_clip=1.0, evaluation_batches=4,
+                      validation_seed=123, samples_enabled=args.wandb_samples)
+    if min(len(training), len(validation)) <= model.config.context:
+        parser.error('Each data split must contain more tokens than the model context.')
     wandb_run = None
     if args.wandb:
         import wandb
-        wandb_run = wandb.init(project='aven-1', id=run_id, name=run_id, resume='allow', config=run_config)
+        wandb_run = wandb.init(project=args.wandb_project, entity=args.wandb_entity, id=run_id, name=run_id, resume='allow', config=run_config, allow_val_change=True, save_code=False)
+        wandb_run.define_metric('step')
         wandb_run.define_metric('*', step_metric='step')
+        wandb_run.define_metric('loss/held_out', summary='min')
+        wandb_run.define_metric('accuracy/held_out', summary='max')
+        wandb_run.summary['status'] = 'training'
+        print(f'W&B tracking: {wandb_run.url or "offline local run"}', flush=True)
         wandb.watch(model, log='all', log_freq=100, log_graph=False)
         sample_prompts = ['Hello!', 'What is 6 plus 7?', 'What is the opposite of fast?',
                            'What day comes after Friday?', 'Introduce yourself']
@@ -179,14 +196,21 @@ def main():
                  history=history, elapsed=0, dataset=args.data.name)
     def perplexity(loss):
         return round(math.exp(min(loss, 20)), 2)
+    eval_metrics = {}
     def evaluate():
         model.eval()
         values = []
+        measurements = []
         rng = torch.Generator().manual_seed(123)
         with torch.no_grad():
             for _ in range(4):
                 x, y = batch(validation, args.batch_size, model.config.context, args.device, rng)
-                values.append(model(x, y)[1].item())
+                logits, eval_loss, _ = model(x, y)
+                values.append(eval_loss.item())
+                if wandb_run:
+                    measurements.append(prediction_metrics(logits, y))
+        if measurements:
+            eval_metrics.update({k: sum(m[k] for m in measurements)/len(measurements) for k in measurements[0]})
         model.train()
         return sum(values)/len(values)
     def save():
@@ -200,13 +224,19 @@ def main():
         history.append(dict(step=0, train_loss=None, val_loss=v, val_perplexity=perplexity(v)))
     atomic_json(out/'status.json', state)
     print(f'{params:,} parameters | vocab {tok.vocab_size} | {args.device} | initial held-out perplexity {history[-1]["val_perplexity"]}', flush=True)
+    if wandb_run and step == 0:
+        wandb_run.log({'step': 0, 'loss/held_out': history[-1]['val_loss'],
+                       'perplexity/held_out': history[-1]['val_perplexity'],
+                       'accuracy/held_out': eval_metrics.get('accuracy', 0)})
     last_loss = None
+    interval_losses, interval_grads = [], []
+    interval_start = time.monotonic()
     try:
         while step < target and not stop:
             model.train()
             x, y = batch(training, args.batch_size, model.config.context, args.device)
             optimizer.zero_grad(set_to_none=True)
-            loss = model(x, y)[1]
+            logits, loss, _ = model(x, y)
             if not torch.isfinite(loss):
                 raise RuntimeError('Loss became nonfinite. Training stopped.')
             loss.backward()
@@ -214,33 +244,62 @@ def main():
             optimizer.step()
             step += 1
             last_loss = loss.item()
+            interval_losses.append(last_loss)
+            interval_grads.append(grad_norm.item())
             if step % 20 == 0 or step == target or stop:
+                training_seconds = max(time.monotonic()-interval_start, 1e-6)
+                eval_start = time.monotonic()
                 val = evaluate()
+                eval_seconds = time.monotonic()-eval_start
                 history.append(dict(step=step, train_loss=last_loss, val_loss=val, val_perplexity=perplexity(val)))
                 save()
                 elapsed = time.monotonic() - start
                 tokens_per_sec = (step - (target - args.steps)) * args.batch_size * model.config.context / max(elapsed, 1e-6)
                 weight_norm = sum(p.data.float().norm()**2 for p in model.parameters()).sqrt().item()
                 if wandb_run:
-                    wandb_run.log({'loss/train': last_loss, 'loss/held_out': val,
-                                    'perplexity/held_out': perplexity(val),
-                                    'throughput/tokens_per_sec': tokens_per_sec,
-                                    'optim/grad_norm': grad_norm.item(), 'optim/weight_norm': weight_norm,
-                                    'optim/lr': optimizer.param_groups[0]['lr'], 'step': step}, step=step)
-                    if step % 100 == 0 or step == target:
+                    train_predictions = prediction_metrics(logits, y)
+                    interval_mean = sum(interval_losses)/len(interval_losses)
+                    metrics = {'loss/train': last_loss, 'loss/train_interval_mean': interval_mean,
+                               'loss/held_out': val, 'loss/held_out_minus_train': val-interval_mean,
+                               'perplexity/train': perplexity(interval_mean), 'perplexity/held_out': perplexity(val),
+                               'accuracy/train_batch': train_predictions['accuracy'],
+                               'accuracy/held_out': eval_metrics['accuracy'],
+                               'accuracy/held_out_top5': eval_metrics['top5_accuracy'],
+                               'prediction/held_out_entropy_nats': eval_metrics['entropy_nats'],
+                               'throughput/tokens_per_sec': tokens_per_sec,
+                               'throughput/train_interval_tokens_per_sec': len(interval_losses)*args.batch_size*model.config.context/training_seconds,
+                               'timing/train_step_ms': 1000*training_seconds/len(interval_losses),
+                               'timing/evaluation_seconds': eval_seconds, 'timing/session_seconds': elapsed,
+                               'progress/session_tokens': (step-(target-args.steps))*args.batch_size*model.config.context,
+                               'progress/session_equivalent_passes': (step-(target-args.steps))*args.batch_size*model.config.context/len(training),
+                               'progress/target_step': target, 'optim/grad_norm': grad_norm.item(),
+                               'optim/grad_norm_interval_mean': sum(interval_grads)/len(interval_grads),
+                               'optim/clipped_step_fraction': sum(g>1 for g in interval_grads)/len(interval_grads),
+                               'optim/weight_norm': weight_norm, 'optim/lr': optimizer.param_groups[0]['lr'],
+                               'checkpoint/size_mb': checkpoint.stat().st_size/2**20, 'step': step}
+                    metrics.update(memory_metrics(args.device))
+                    metrics.update(diagnostics(model))
+                    wandb_run.log(metrics, step=step, commit=False)
+                    if args.wandb_samples and (step % 100 == 0 or step == target):
                         rows = []
                         for p in sample_prompts:
                             wrapped = f'### Instruction:\n{p}\n\n### Response:\n' if stage == 'finetune' else p
-                            text, _ = model.generate(wrapped, count=50, temperature=0.8, tokenizer=tok,
+                            text, _ = model.generate(wrapped, count=50, temperature=0.0, tokenizer=tok,
                                                       stop_text='<|end|>' if stage == 'finetune' else None)
                             rows.append([step, p, text[len(wrapped):] if text.startswith(wrapped) else text])
-                        wandb_run.log({'samples': wandb.Table(columns=['step', 'prompt', 'response'], data=rows)}, step=step)
+                        wandb_run.log({'samples': wandb.Table(columns=['step', 'prompt', 'response'], data=rows)}, step=step, commit=False)
+                    wandb_run.log({'step': step}, step=step)
+                interval_losses.clear()
+                interval_grads.clear()
+                interval_start = time.monotonic()
                 print(f'Step {step} | train {last_loss:.3f} | held-out {val:.3f} | perplexity {perplexity(val)} | grad_norm {grad_norm:.3f}', flush=True)
             state.update(step=step, train_loss=last_loss, elapsed=round(time.monotonic()-start, 1))
             atomic_json(out/'status.json', state)
         save()
         state.update(status='paused' if stop else 'complete', step=step)
         atomic_json(out/'status.json', state)
+        if wandb_run:
+            wandb_run.summary.update({'status': state['status'], 'final_step': step, 'final_val_loss': history[-1]['val_loss']})
         append_ledger(dict(run_id=run_id, stage=stage, dataset=args.data.name, parameters=params,
                             vocab=tok.vocab_size, step=step, target=target,
                             final_val_loss=history[-1]['val_loss'], final_perplexity=history[-1]['val_perplexity'],
@@ -249,13 +308,15 @@ def main():
     except Exception as exc:
         state.update(status='error', error=str(exc), step=step)
         atomic_json(out/'status.json', state)
+        if wandb_run:
+            wandb_run.summary.update({'status': state['status'], 'final_step': step, 'final_val_loss': history[-1]['val_loss']})
         append_ledger(dict(run_id=run_id, stage=stage, dataset=args.data.name, parameters=params,
                             vocab=tok.vocab_size, step=step, target=target, status='error', error=str(exc),
                             config=asdict(model.config), timestamp=time.strftime('%Y-%m-%dT%H:%M:%S')))
         raise
     finally:
         if wandb_run:
-            wandb_run.finish()
+            wandb_run.finish(exit_code=1 if state['status'] == 'error' else 0)
 
 
 if __name__ == '__main__':
