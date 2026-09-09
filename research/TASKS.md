@@ -12,6 +12,7 @@ Goal: develop Aven into a reproducible research project supporting a future AI r
 
 ## Coordination
 
+- **Concurrent-resume hazard (2026-09-09):** Two platforms resumed the same checkpoint/run ID concurrently, causing W&B step-order conflicts and ambiguous lineage. A shared W&B run is not reliable evidence of which platform produced a metric or checkpoint. Before resuming, record the owner/platform, exact checkpoint SHA-256, architecture, starting step and output location; allow only one active writer per run ID/output directory. Parallel continuations must use distinct W&B execution IDs and output folders while recording their common parent checkpoint. Treat folder labels as descriptions, not identity, and verify a durable checkpoint export before ending a cloud session.
 - Read this board and the relevant GitHub issue before working; record the files and branch you intend to change.
 - Claude owns the active pretraining changes. Codex owns evaluation and review. Arrange a handoff before changing the other workstream's active files.
 - Use separate branches/worktrees for simultaneous edits. Avoid concurrent GPU jobs on the 8 GB Mac.
