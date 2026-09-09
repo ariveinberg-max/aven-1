@@ -35,7 +35,7 @@ The interesting part isn't that this worked — it's the failures, because each 
 
 After the pipeline above stabilized on a 19.8M-parameter fine-tuned model, a separate pretraining track tested scale directly: a 58,424,832-parameter model (768-wide, 8 layers, 12 heads) was pretrained on the same six-book, 2.2 MB corpus, then a second, larger 153M-parameter model (1024-wide, 12 layers, 16 heads) was pretrained from scratch on the identical corpus and tokenizer settings, both on a free Colab T4 GPU.
 
-At an equal step count (1000 steps), the larger model was *worse*, not better:
+In this **matched-step** comparison (1000 optimizer steps per model), the larger model had higher held-out loss and perplexity. This is not a matched-compute comparison: the models require different amounts of computation per step, and total FLOPs were not measured:
 
 | Model | Parameters | Step | Held-out loss | Held-out perplexity |
 |---|---|---|---|---|
