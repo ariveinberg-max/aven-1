@@ -1,8 +1,12 @@
 """Low-frequency diagnostics for Aven training. No raw corpus or checkpoint uploads."""
 import math
-import resource
 import sys
 import torch
+
+try:
+    import resource  # Unix-only; unavailable on Windows.
+except ImportError:
+    resource = None
 
 
 def prediction_metrics(logits, targets):
@@ -16,9 +20,13 @@ def prediction_metrics(logits, targets):
 
 
 def memory_metrics(device):
-    # ru_maxrss is bytes on macOS and KiB on Linux; this is a peak, not current RSS.
-    scale = 1 if sys.platform == 'darwin' else 1024
-    values = {'memory/process_peak_rss_mb': resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * scale / 2**20}
+    values = {}
+    if resource is not None:
+        # ru_maxrss is bytes on macOS and KiB on Linux; this is a peak, not current RSS.
+        scale = 1 if sys.platform == 'darwin' else 1024
+        values['memory/process_peak_rss_mb'] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * scale / 2**20
+    # No Windows equivalent wired up yet -- this metric is simply omitted there
+    # rather than adding a new dependency (e.g. psutil) for one W&B field.
     if device == 'mps':
         values.update({'memory/mps_allocated_mb': torch.mps.current_allocated_memory()/2**20,
                        'memory/mps_driver_mb': torch.mps.driver_allocated_memory()/2**20})
