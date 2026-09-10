@@ -73,7 +73,7 @@ GREETING_REPLIES = [
     'Hi! Good to hear from you.',
 ]
 FAREWELL_PROMPTS = ['Goodbye', 'Bye', 'See you later', 'Thanks, bye', 'I have to go now', "That's all, bye",
-                     'Talk to you later', 'Signing off', 'Catch you later']
+                     'Talk to you later', 'Signing off', 'Catch you later', 'See you later then', 'Alright, bye then']
 FAREWELL_REPLIES = ['Goodbye! Come back anytime.', 'See you later!', 'Take care!', 'Bye for now!']
 THANKS_PROMPTS = ['Thank you', 'Thanks a lot', 'Thanks for the help', 'I appreciate it', 'Much appreciated',
                    'Thanks so much', 'That helped, thanks', 'Cheers']
@@ -89,7 +89,8 @@ IDENTITY_REPLIES = [
 HELP_PROMPTS = ['Can you help me?', 'I need some help', 'Could you assist me?', 'I have a question',
                 'Can I ask you something?', 'Help me out here', 'I need assistance']
 HELP_REPLIES = ["I'll do my best. What do you need?", 'Sure — what do you need help with?', 'Of course, go ahead.']
-WELLBEING_PROMPTS = ['How are you?', 'How are you doing?', 'How are you feeling?', "How's it going?"]
+WELLBEING_PROMPTS = ['How are you?', 'How are you doing?', 'How are you feeling?', "How's it going?",
+                      'How are you doing today?', "How's it going today?"]
 WELLBEING_REPLIES = ["I'm a small language model, so I don't have feelings, but I'm ready to help.",
                       "I don't experience feelings, but everything is running fine."]
 
@@ -205,6 +206,13 @@ FACTS = [
     ('What is the largest mammal on Earth?', 'The blue whale is the largest mammal on Earth.'),
     ('What is the currency used in the United States?', 'The currency used in the United States is the dollar.'),
     ('What is the currency used in Japan?', 'The currency used in Japan is the yen.'),
+    # v9: live testing found Spain/Brazil (entirely absent before) produced hallucinated
+    # garbage ("The capital of Gerry Wedneser.") instead of any recognizable fallback --
+    # covering more of the handful of countries people actually ask about first.
+    ('What is the capital of Spain?', 'The capital of Spain is Madrid.'),
+    ('What is the capital of Brazil?', 'The capital of Brazil is Brasilia.'),
+    ('What is the capital of Mexico?', 'The capital of Mexico is Mexico City.'),
+    ('What is the capital of India?', 'The capital of India is New Delhi.'),
 ]
 FACT_PHRASE_PREFIXES = ['{q}', 'Quick question: {q}', 'Do you know {q_lower}', 'Tell me, {q_lower}']
 
@@ -496,7 +504,17 @@ def all_single_turn_pools():
         'antonym': antonym_examples() * 7,
         'fact': fact_examples() * 5,
         'open_ended': open_ended_examples() * 5,
-        'book': book_examples(),
+        # v9: live testing (2026-09-10) found this category getting spliced into an
+        # unrelated FACTS answer ("who is the author of frankenstein" ->
+        # "Franker freezes at 32 degrees Fahrenheit.") -- the exact same failure
+        # shape as the original "George Water freezes..." bug, but happening in a
+        # single fresh turn with no conversation history, which rules out the
+        # multi-turn-context explanation. The real cause here: BOOK had only 18
+        # examples at 1x weight versus FACTS's ~800 examples at 5x weight plus
+        # casual-phrasing duplicates that BOOK never got at all -- a plain density
+        # imbalance, not a context problem. Weighted up and added to casual_sources
+        # below to match FACTS's treatment.
+        'book': book_examples() * 5,
         'calendar': calendar_examples() * 4,
         'list': list_examples(800),
         'fallback': fallback_examples() * 6,
@@ -507,7 +525,7 @@ def all_single_turn_pools():
     # punctuation, texting contractions) — the categories most likely to be typed casually.
     casual_sources = ['greeting', 'farewell', 'thanks', 'identity', 'help', 'wellbeing',
                        'arithmetic', 'antonym', 'calendar', 'list', 'comparison', 'fallback', 'fact',
-                       'open_ended', 'help_with_topic']
+                       'open_ended', 'help_with_topic', 'book']
     for name in casual_sources:
         pools[f'{name}_casual'] = add_casual(pools[name], rate=0.6)
     return pools
