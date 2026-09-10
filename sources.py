@@ -57,16 +57,31 @@ def delete_source(name):
 
 
 def compile_corpus():
+    """Stream sources into data/training.txt in chunks rather than reading
+    every source fully into memory and joining as one big Python string --
+    at hundreds of MB to GB (e.g. a Wikipedia extraction source), the old
+    approach could itself need as much RAM as the corpus is large, on top
+    of everything else."""
     items = list_sources()
     if not items:
         raise ValueError('Add at least one source to the workspace before compiling.')
-    parts = [Path(SOURCES_DIR / item['name']).read_text(encoding='utf-8', errors='replace') for item in items]
-    combined = '\n\n'.join(parts).strip() + '\n'
-    raw = combined.encode('utf-8')
-    if len(raw) < 4096:
-        raise ValueError('Combined sources must total at least 4 KB (roughly 700-1000 words).')
-    if len(raw) > 2_000_000_000:
+    total_size = sum(item['bytes'] for item in items)
+    if total_size > 2_000_000_000:
         raise ValueError('Combined sources exceed the 2 GB limit.')
     ROOT.joinpath('data').mkdir(exist_ok=True)
-    CORPUS_PATH.write_bytes(raw)
-    return len(raw)
+    tmp = CORPUS_PATH.with_suffix('.tmp')
+    written = 0
+    with open(tmp, 'wb') as out:
+        for i, item in enumerate(items):
+            with open(SOURCES_DIR / item['name'], 'rb') as src:
+                for chunk in iter(lambda: src.read(8 * 1024 * 1024), b''):
+                    out.write(chunk)
+                    written += len(chunk)
+            if i < len(items) - 1:
+                out.write(b'\n\n')
+                written += 2
+    if written < 4096:
+        tmp.unlink()
+        raise ValueError('Combined sources must total at least 4 KB (roughly 700-1000 words).')
+    tmp.replace(CORPUS_PATH)
+    return written

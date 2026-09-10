@@ -143,6 +143,19 @@ The RLHF pipeline above (`preferences.py`, `reward_model.py`, `train_reward.py`,
 
 - `PREFERENCE_PROMPTS` was trimmed to the nine prompts that showed real, coherent multi-reply variance in both test runs (`Tell me about yourself`, `What kind of AI are you?`, `Hello!`, `Good morning`, `How's it going?`, `Thank you`, `Thanks for the help`, `I have a question`, `What makes a good friend?`). No preference labels were collected or simulated as part of this check — real labeling with this refreshed list is still a task for the user, not this session.
 
+## First independent capability evaluation (2026-09-09): a real, honest zero
+
+Running Codex's `evaluate_capabilities.py` (issue #2) against the current 58.4M fine-tuned checkpoint (step 5000, hash `6fb04450...`, `data/instructions.txt` now including the facts category) produced **0% accuracy on every one of 5 categories** — comprehension, instruction-following, arithmetic, facts, and code reading (0/6 each, 30 questions total). This is strict, exact-match scoring (`response.strip() in expected_answers`) with greedy decoding, checked for training-data overlap (8-word exact-span matching against `data/instructions.txt`: zero hits — these are not memorized questions).
+
+This looks worse than the live chat testing earlier tonight ("who was the first president" → correct; "6 plus 7" → correct), and the reason is informative, not contradictory:
+
+- **Arithmetic**: every failure used two-digit numbers ("17 + 26", "91 - 37") outside the single-digit range the model was actually trained on. It still recognized the operation and produced the right *format* ("17 plus 26 is 21.") but the wrong number — confirming, again, that it pattern-matches memorized examples rather than computing, this time on numbers just slightly outside its training distribution rather than compact notation.
+- **Facts**: some responses were factually correct but format-noncompliant under strict scoring — asked "Which planet is closest to the Sun? Answer only its name," it correctly said "Mercury is the planet closest to the sun," but the eval wanted exactly `"Mercury"`. This is a real, fair failure (the model can't follow an output-format constraint), not evidence the fact itself wasn't learned.
+- **Comprehension and code reading**: genuine, unambiguous failures — multi-step reasoning ("who arrived last," "where is the marble now") and code-execution questions got unrelated memorized facts or garbled text, with no partial credit available. The model has no capability here at all; nothing in its training data teaches multi-step reasoning or code semantics.
+- **Instructions**: same pattern as comprehension — asked to reverse letters or extract one word from a list, it falls back to unrelated canned facts. Output-format control was never trained as its own skill.
+
+Honest takeaway: the model's real, verified capability is narrow-and-correct pattern completion on categories it was directly and repeatedly trained on (greetings, single-digit arithmetic in trained phrasings, a fixed set of facts) — and it generalizes close to zero beyond that, even to trivially adjacent variations (two-digit arithmetic, exact-output formatting, in-distribution facts phrased with a stricter answer format). This validates Codex's originally proposed roadmap: the next real capability gains come from comprehension/instruction-following/reasoning training data and much broader arithmetic ranges, not from more parameters or more of the same kind of narrow Q&A data.
+
 ## What's next
 
 - Label substantially more real preference comparisons — the PPO experiments above suggest 34 isn't enough for stable direct policy optimization, even though it's already enough for RAFT and a genuinely signal-carrying reward model
