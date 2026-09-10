@@ -22,7 +22,10 @@
 set -u
 cd "$(dirname "$0")"
 
-if [ -x .venv/bin/python ]; then
+if [ -n "${PYTHON:-}" ]; then
+    :  # explicit override (e.g. Windows, where PATH resolution of
+       # python/python3 is unreliable -- see the App execution alias issue)
+elif [ -x .venv/bin/python ]; then
     PYTHON=.venv/bin/python
 else
     PYTHON="$(command -v python3 || command -v python)"
