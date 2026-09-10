@@ -36,15 +36,56 @@ MAX_RETRIES="${MAX_RETRIES:-20}"
 BACKOFF_SECONDS="${BACKOFF_SECONDS:-30}"
 LOG_FILE="${LOG_FILE:-run_resilient.log}"
 
+# Portable fallbacks for a minimal Git-for-Windows Bash (discovered running
+# this on Windows: no tee/date/sleep/which, only bash itself plus a handful
+# of coreutils) -- prefer the real command everywhere it exists (Mac/Linux),
+# only fall back to a pure-bash equivalent where it's genuinely missing.
+have() { command -v "$1" >/dev/null 2>&1; }
+
+now_utc() {
+    if have date; then
+        date -u +%Y-%m-%dT%H:%M:%SZ
+    else
+        printf '%(%Y-%m-%dT%H:%M:%SZ)T\n' -1  # bash 4.2+ builtin; only reached when date is absent
+    fi
+}
+
+portable_sleep() {
+    if have sleep; then
+        sleep "$1"
+    else
+        read -rt "$1" _ < /dev/null 2>/dev/null
+        return 0
+    fi
+}
+
+tee_append() {
+    if have tee; then
+        tee -a "$1"
+    else
+        while IFS= read -r line || [ -n "$line" ]; do
+            printf '%s\n' "$line"
+            printf '%s\n' "$line" >> "$1"
+        done
+    fi
+}
+
 ORIG_ARGS=("$@")
-if printf '%s\n' "${ORIG_ARGS[@]}" | grep -qx -- '--resume'; then
+resume_already_present=0
+for a in "${ORIG_ARGS[@]}"; do
+    if [ "$a" = "--resume" ]; then
+        resume_already_present=1
+        break
+    fi
+done
+if [ "$resume_already_present" = "1" ]; then
     RESUME_ARGS=("${ORIG_ARGS[@]}")
 else
     RESUME_ARGS=("${ORIG_ARGS[@]}" --resume)
 fi
 
 log() {
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*" | tee -a "$LOG_FILE"
+    echo "[$(now_utc)] $*" | tee_append "$LOG_FILE"
 }
 
 attempt=0
@@ -53,7 +94,7 @@ while true; do
     attempt=$((attempt + 1))
     log "Attempt $attempt/$MAX_RETRIES: python train.py ${args[*]}"
 
-    "$PYTHON" train.py "${args[@]}" 2>&1 | tee -a "$LOG_FILE"
+    "$PYTHON" train.py "${args[@]}" 2>&1 | tee_append "$LOG_FILE"
     code=${PIPESTATUS[0]}
 
     if [ "$code" -eq 0 ]; then
@@ -78,5 +119,5 @@ while true; do
 
     log "Crashed or was interrupted (exit $code). Retrying in ${BACKOFF_SECONDS}s with --resume."
     args=("${RESUME_ARGS[@]}")
-    sleep "$BACKOFF_SECONDS"
+    portable_sleep "$BACKOFF_SECONDS"
 done
