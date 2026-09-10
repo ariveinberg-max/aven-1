@@ -138,6 +138,134 @@ BOOKS = [
 ]
 BOOK_QUESTIONS = ['Who wrote {t}?', 'Who is the author of {t}?', 'Name the author of {t}.']
 
+# v5: testing found the model has zero real-world factual knowledge -- it was
+# only ever trained on synthetic arithmetic/antonym/greeting patterns, so a
+# question like "who was the first president" gets a plausible-sounding but
+# meaningless answer. These are hand-verified, timeless facts (no "current
+# president" style facts that go stale) covering history, geography, and
+# basic science -- a small, honest start, not a knowledge base.
+FACTS = [
+    ('Who was the first president of the United States?', 'George Washington was the first president of the United States.'),
+    ('What is the capital of France?', 'The capital of France is Paris.'),
+    ('What is the capital of Japan?', 'The capital of Japan is Tokyo.'),
+    ('What is the capital of Italy?', 'The capital of Italy is Rome.'),
+    ('What is the capital of Germany?', 'The capital of Germany is Berlin.'),
+    ('What is the capital of the United Kingdom?', 'The capital of the United Kingdom is London.'),
+    ('What is the capital of Russia?', 'The capital of Russia is Moscow.'),
+    ('What is the capital of China?', 'The capital of China is Beijing.'),
+    ('What is the capital of Canada?', 'The capital of Canada is Ottawa.'),
+    ('What is the capital of Australia?', 'The capital of Australia is Canberra.'),
+    ('What is the capital of Egypt?', 'The capital of Egypt is Cairo.'),
+    ('How many continents are there?', 'There are seven continents.'),
+    ('How many oceans are there?', 'There are five oceans.'),
+    ('What is the largest planet in the solar system?', 'Jupiter is the largest planet in the solar system.'),
+    ('What is the smallest planet in the solar system?', 'Mercury is the smallest planet in the solar system.'),
+    ('Which planet is closest to the sun?', 'Mercury is the planet closest to the sun.'),
+    ('Which planet do we live on?', 'We live on the planet Earth.'),
+    ('At what temperature does water boil, in Celsius?', 'Water boils at 100 degrees Celsius at sea level.'),
+    ('At what temperature does water freeze, in Celsius?', 'Water freezes at 0 degrees Celsius.'),
+    ('How many legs does a spider have?', 'A spider has eight legs.'),
+    ('How many legs does an insect have?', 'An insect has six legs.'),
+    ('What is the chemical symbol for water?', 'The chemical symbol for water is H2O.'),
+    ('What is the chemical symbol for gold?', 'The chemical symbol for gold is Au.'),
+    ('What gas do humans need to breathe to survive?', 'Humans need oxygen to survive.'),
+    ('What gas do plants absorb from the air?', 'Plants absorb carbon dioxide from the air.'),
+    ('How many bones are in the adult human body?', 'An adult human body has 206 bones.'),
+    ('What is the largest ocean on Earth?', 'The Pacific Ocean is the largest ocean on Earth.'),
+    ('What is the longest river in the world?', 'The Nile is generally considered the longest river in the world.'),
+    ('What is the tallest mountain in the world?', 'Mount Everest is the tallest mountain in the world.'),
+    ('What is the largest desert in the world?', 'The Antarctic Desert is the largest desert in the world.'),
+    ('Who painted the Mona Lisa?', 'Leonardo da Vinci painted the Mona Lisa.'),
+    ('Who developed the theory of relativity?', 'Albert Einstein developed the theory of relativity.'),
+    ('Who wrote Romeo and Juliet?', 'William Shakespeare wrote Romeo and Juliet.'),
+    ('What year did World War II end?', 'World War II ended in 1945.'),
+    ('What is the speed of light approximately, in kilometers per second?', 'The speed of light is approximately 300,000 kilometers per second.'),
+    ('How many colors are in a rainbow?', 'A rainbow has seven colors.'),
+    ('How many sides does a hexagon have?', 'A hexagon has six sides.'),
+    ('How many sides does a triangle have?', 'A triangle has three sides.'),
+    ('What is the freezing point of water in Fahrenheit?', 'Water freezes at 32 degrees Fahrenheit.'),
+    ('What is the largest mammal on Earth?', 'The blue whale is the largest mammal on Earth.'),
+    ('What is the currency used in the United States?', 'The currency used in the United States is the dollar.'),
+    ('What is the currency used in Japan?', 'The currency used in Japan is the yen.'),
+]
+FACT_PHRASE_PREFIXES = ['{q}', 'Quick question: {q}', 'Do you know {q_lower}', 'Tell me, {q_lower}']
+
+
+def fact_question_variants(q):
+    q_lower = q[0].lower() + q[1:]
+    return [p.format(q=q, q_lower=q_lower) for p in FACT_PHRASE_PREFIXES]
+
+# v6: RLHF preference labeling stalled at 12 decided / 18 tied comparisons because
+# the model has zero trained substance on open-ended/opinion prompts -- WRITEUP.md's
+# RLHF section already diagnosed this exact failure mode for the old 19.8M model
+# (creative-writing prompts came back "decisive but incoherent," never fixed by
+# more phrasing variety since there was nothing real underneath). FACTS above fixed
+# single-sentence factual gaps; this fixes multi-sentence opinion/explanation gaps
+# the same way GREETING_REPLIES/IDENTITY_REPLIES fixed small talk: several genuinely
+# different, coherent, hand-written 2-3 sentence answers per question, not one
+# canned reply -- so sampling at different temperatures has real variance to label
+# instead of ties (same answer every time) or noise (no trained answer at all).
+OPEN_ENDED = [
+    ("What makes a good friend?", [
+        "A good friend listens without judging and tells you the truth even when it's hard to hear. They also show up when it actually matters, not just when it's convenient.",
+        "I'd say trust matters most — someone who keeps their word and keeps your secrets. Beyond that, they support your decisions even when they'd choose differently themselves.",
+        "Reliability is the real test: does this person show up on a bad day, not just a good one? Everything else, like shared interests, matters much less than that.",
+    ]),
+    ("Is it better to be cautious or take risks?", [
+        "It depends on what's at stake. For something reversible, taking the risk usually teaches you more; for something permanent, caution protects you from a mistake you can't undo.",
+        "I'd lean toward taking risks early in anything new, since the cost of a small failure is low and the information you gain is valuable. Caution matters more once a lot is already built on the outcome.",
+        "Neither one is right on its own. Being too cautious means missing real opportunities, while being too reckless means the failures pile up faster than you can recover from them.",
+    ]),
+    ("Would you rather be invisible or be able to fly?", [
+        "I'd pick flying. Invisibility is mostly useful for avoiding people, but flying would actually let you get somewhere and see the world differently.",
+        "Invisibility, honestly — it seems more useful day to day, like avoiding an awkward conversation or watching something unfold without being noticed.",
+        "Flying, without much hesitation. It solves a real, everyday problem, getting places, while invisibility is more of a novelty than something genuinely useful.",
+    ]),
+    ("What is more important, money or happiness?", [
+        "Happiness is the actual goal, but money is often what removes obstacles in the way of it, like stress about bills or medical care. Past a certain point, though, more money stops adding much happiness at all.",
+        "I'd say happiness, since money is only ever a means to something else. A lot of the things that make people happiest, close relationships, good health, don't cost much at all.",
+        "It's not really a fair fight since one is a resource and the other is a state of mind. Enough money removes a lot of daily stress, but it doesn't guarantee happiness on its own.",
+    ]),
+    ("Is it better to work alone or with a team?", [
+        "It depends on the task. Alone is faster for something with one clear right answer, while a team is better when the problem benefits from different perspectives catching each other's blind spots.",
+        "I'd lean toward teams for most real work, since a second person catches mistakes you can't see in your own thinking. Working alone is more efficient, but only when nothing much can go wrong.",
+        "Working alone gives you more control and fewer meetings, but a good team gets you further on anything complicated, since no one person has every skill a hard problem actually needs.",
+    ]),
+    ("What is the best way to learn something new?", [
+        "Actually doing the thing beats reading about it almost every time, since mistakes you make yourself stick in a way that reading never quite does. Reading is best used to fill in gaps once you're already stuck.",
+        "I'd say consistent small practice beats occasional long sessions. An hour a day for a month teaches more than one twelve-hour cram session, since the spacing helps it actually stick.",
+        "Teaching it to someone else is one of the fastest ways to find out what you don't actually understand yet. Trying to explain something clearly exposes the gaps that just reading over it hides.",
+    ]),
+    ("Do you think technology makes life better or worse?", [
+        "Mostly better, on balance — medicine, communication, and access to information have all improved enormously. It also creates new problems, like distraction and privacy loss, that didn't exist before.",
+        "It's genuinely mixed. Technology solves real problems, like connecting people across distance, but it also introduces new ones, like the amount of attention it constantly asks for.",
+        "I'd say it depends heavily on how it's used rather than the technology itself. The same phone that wastes someone's whole evening also lets them learn a new skill for free.",
+    ]),
+    ("What is more important, talent or hard work?", [
+        "Hard work matters more over time, since talent without effort tends to plateau early while consistent effort keeps compounding. Talent mostly just decides how fast the first few steps go.",
+        "I'd say they solve different problems: talent gives you a head start, but hard work is what actually gets you to a genuinely high level and keeps you there.",
+        "Talent is overrated compared to how it gets talked about. Most people who look naturally gifted actually put in enormous, mostly invisible amounts of practice to get there.",
+    ]),
+    ("Should people always tell the truth, even if it hurts?", [
+        "Mostly yes, since trust breaks down once people can't rely on what you tell them. There's still room for tact in how something true gets said, without changing what's actually true.",
+        "I'd make room for small exceptions, like sparing someone's feelings over something trivial, but for anything that actually matters, the truth should come first.",
+        "Honesty should be the default, but delivery matters just as much as the fact itself. A true thing said cruelly can do as much damage as a lie.",
+    ]),
+]
+OPEN_ENDED_WRAPPERS = ['{q}', 'What do you think: {q_lower}', 'In your opinion, {q_lower}', "I'm curious, {q_lower}"]
+
+
+def open_ended_examples():
+    out = []
+    for q, replies in OPEN_ENDED:
+        q_lower = q[0].lower() + q[1:]
+        for wrapper in OPEN_ENDED_WRAPPERS:
+            wrapped = wrapper.format(q=q, q_lower=q_lower)
+            for reply in replies:
+                out.append((wrapped, reply))
+    return out
+
+
 NUMBER_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
 ARITH_ADD_PHRASES = ['What is {a} plus {b}?', 'What is {a} + {b}?', 'Add {a} and {b}.', 'What do you get if you add {a} and {b}?',
                       '{a}+{b}', '{a}+{b}=?', 'whats {a}+{b}', '{a} + {b} =']
@@ -297,6 +425,14 @@ def fallback_examples():
     return out
 
 
+def fact_examples():
+    out = []
+    for q, a in FACTS:
+        for variant in fact_question_variants(q):
+            out.append((variant, a))
+    return out
+
+
 def book_examples():
     out = []
     for title, author in BOOKS:
@@ -305,8 +441,15 @@ def book_examples():
     return out
 
 
-def continuation_examples(n):
-    text = (ROOT / 'data/training.txt').read_text(encoding='utf-8', errors='replace')
+def continuation_examples(n, max_bytes=20_000_000):
+    # Read only a bounded prefix, not the whole file: data/training.txt is now the
+    # ~6.95GB Wikipedia+books corpus (was 354MB when this function was written), and
+    # loading it whole risks the same macOS memory-pressure kill documented twice in
+    # research/TASKS.md for other jobs on this 8GB Mac. A 20MB sample (same bound
+    # sources.py/train.py already use for tokenizer training) still gives thousands
+    # of diverse candidate sentences -- plenty for `n` in the low thousands.
+    with open(ROOT / 'data/training.txt', 'r', encoding='utf-8', errors='replace') as f:
+        text = f.read(max_bytes)
     sentences = re.split(r'(?<=[.!?])\s+', text)
     sentences = [s.strip().replace('\n', ' ') for s in sentences if 40 <= len(s.strip()) <= 160]
     out = []
@@ -333,6 +476,8 @@ def all_single_turn_pools():
         'comparison': comparison_examples(1000),
         'word': word_task_examples(1600),
         'antonym': antonym_examples() * 7,
+        'fact': fact_examples() * 5,
+        'open_ended': open_ended_examples() * 5,
         'book': book_examples(),
         'calendar': calendar_examples() * 4,
         'list': list_examples(800),
@@ -342,7 +487,8 @@ def all_single_turn_pools():
     # Casual-phrasing duplicates: same correct response, informal wording (lowercase, no
     # punctuation, texting contractions) — the categories most likely to be typed casually.
     casual_sources = ['greeting', 'farewell', 'thanks', 'identity', 'help', 'wellbeing',
-                       'arithmetic', 'antonym', 'calendar', 'list', 'comparison', 'fallback']
+                       'arithmetic', 'antonym', 'calendar', 'list', 'comparison', 'fallback', 'fact',
+                       'open_ended']
     for name in casual_sources:
         pools[f'{name}_casual'] = add_casual(pools[name], rate=0.6)
     return pools
