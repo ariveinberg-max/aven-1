@@ -200,6 +200,20 @@ Net result: a real, verified fix for the specific bug that was investigated, and
 
 Honest takeaway: more training steps on a bigger, more diverse instruction pool doesn't uniformly help — it can fix one category's coherence while re-breaking another category's *variance*, simultaneously, in the same run. This is the same tie/over-drilling dynamic this project's RLHF section already found for the original categories, now observed happening live to a brand-new category within a single training run, not just across categories. `PREFERENCE_PROMPTS` in `server.py` should be updated to include the categories that now show genuine variance (at minimum the risk/caution prompt) but not the ones that collapsed to ties (the good-friend prompt) — left for whoever owns that file next, since it currently has unrelated uncommitted changes.
 
+## A checkpoint's tie/coherence state per prompt is not stable across training (2026-09-10)
+
+After the `help_with_topic` finetune pass (cumulative 2,320 steps this session), re-tested tie rates on both prompt sets live via `/api/preferences/pair`:
+
+- **Original 9 `PREFERENCE_PROMPTS`** (the ones already curated down from 19 for showing real variance, 2026-09-09): **9/15 phrasing variants tied** (some prompts tested with multiple close variants). Comparable to the ~53% average tie rate found when this list was first curated — training since then didn't meaningfully change this set's behavior either direction.
+- **All 9 `OPEN_ENDED` prompts**: only 2/9 tied outright, which sounds like a win, but reading the actual text tells a different story:
+  - **Genuinely good** (coherent, different, real preference signal): "What makes a good friend?", "What is more important, money or happiness?", "What is the best way to learn something new?"
+  - **Ties**: "Would you rather be invisible or be able to fly?", "Do you think technology makes life better or worse?"
+  - **Decisive but incoherent** (real difference, but at least one side is word salad — no usable preference signal): "Is it better to be cautious or take risks?", "Is it better to work alone or with a team?", "What is more important, talent or hard work?", "Should people always tell the truth, even if it hurts?"
+
+**The important part: this is not the same breakdown as the previous check at step 1520.** At that checkpoint, "Is it better to be cautious or take risks?" was the standout *good* result (two clean, coherent, different answers) and "What makes a good friend?" was the tie. 800 steps later, they've swapped roles — cautious/risk is now garbled, good-friend is now clean and varied. Nothing about which specific prompt is "fixed" is stable across training checkpoints; what's happening is closer to different categories cycling through good/tied/garbled states as gradient updates reallocate a fixed, small amount of model capacity across the whole instruction pool, not each category converging monotonically to a better state.
+
+**Practical implication for `PREFERENCE_PROMPTS`:** a curated list is a property of one specific checkpoint, not a stable fact about a prompt. Whoever updates `server.py`'s list should re-verify tie/coherence state live against the checkpoint actually being used for labeling at that time, rather than trusting a list curated against an earlier checkpoint — exactly the mistake that would silently reintroduce the original 86%-tie problem this section started with.
+
 ## help/fallback category-boundary fix (2026-09-10): also verified
 
 Added `HELP_WITH_TOPIC_PROMPTS` (10 "can you help me with X" phrasings, naming a specific task) paired with the honest `FALLBACK_REPLIES`, since `HELP_PROMPTS` was only bare topic-less requests and `FALLBACK_QUESTIONS` was only direct out-of-scope questions — "help me with X" fell between both with nothing anchoring it, which is exactly what produced the garbled/wrong-category replies to "can u help me with a math problem?" earlier in this section. Finetuned 800 further steps (held-out perplexity 1.75 -> 1.15) and re-tested live:
