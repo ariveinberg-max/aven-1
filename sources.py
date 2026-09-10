@@ -66,8 +66,8 @@ def compile_corpus():
     if not items:
         raise ValueError('Add at least one source to the workspace before compiling.')
     total_size = sum(item['bytes'] for item in items)
-    if total_size > 2_000_000_000:
-        raise ValueError('Combined sources exceed the 2 GB limit.')
+    if total_size > 10_000_000_000:
+        raise ValueError('Combined sources exceed the 10 GB limit.')
     ROOT.joinpath('data').mkdir(exist_ok=True)
     tmp = CORPUS_PATH.with_suffix('.tmp')
     written = 0
