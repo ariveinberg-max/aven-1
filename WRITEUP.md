@@ -200,6 +200,17 @@ Net result: a real, verified fix for the specific bug that was investigated, and
 
 Honest takeaway: more training steps on a bigger, more diverse instruction pool doesn't uniformly help — it can fix one category's coherence while re-breaking another category's *variance*, simultaneously, in the same run. This is the same tie/over-drilling dynamic this project's RLHF section already found for the original categories, now observed happening live to a brand-new category within a single training run, not just across categories. `PREFERENCE_PROMPTS` in `server.py` should be updated to include the categories that now show genuine variance (at minimum the risk/caution prompt) but not the ones that collapsed to ties (the good-friend prompt) — left for whoever owns that file next, since it currently has unrelated uncommitted changes.
 
+## help/fallback category-boundary fix (2026-09-10): also verified
+
+Added `HELP_WITH_TOPIC_PROMPTS` (10 "can you help me with X" phrasings, naming a specific task) paired with the honest `FALLBACK_REPLIES`, since `HELP_PROMPTS` was only bare topic-less requests and `FALLBACK_QUESTIONS` was only direct out-of-scope questions — "help me with X" fell between both with nothing anchoring it, which is exactly what produced the garbled/wrong-category replies to "can u help me with a math problem?" earlier in this section. Finetuned 800 further steps (held-out perplexity 1.75 -> 1.15) and re-tested live:
+
+- `can u help me with a math problem?` -> "That's outside what I've been trained on. I can help with the kinds of things I've practiced." — **fixed**, correct category.
+- `can you help me with my homework?` / `can you help me fix my code?` -> both correctly get honest fallback-style replies.
+- `I need some help` (bare, no topic) -> "Of course, go ahead." — still correctly gets the inviting help reply, confirming the two phrasing shapes are now cleanly separated rather than one crowding out the other.
+- The original fact-splicing fix re-checked again — still holds: "who was the first president" still answers "George Washington...".
+
+**Not a fix, and worth flagging honestly rather than ignoring:** the same round of training happened to make `whatss 1+1` answer "1 plus 1 is 2." (correct) and `whats 17+26` answer "17 plus 26 is 43." (correct, and notably outside the 1-20 training range for addition operands). This is **not** claimed as a real arithmetic-generalization fix — a follow-up spot check on `whatss 2+2` immediately produced "2 times 2 is 8." (wrong operation, and wrong even for that operation), confirming this is still pure pattern completion with no real computation behind it. One or two correct samples after more training is not evidence of a new capability; it would take a full re-run of `evaluate_capabilities.py`'s formal arithmetic suite to say anything real about this, which hasn't been done.
+
 ## What's next
 
 - Label substantially more real preference comparisons — the PPO experiments above suggest 34 isn't enough for stable direct policy optimization, even though it's already enough for RAFT and a genuinely signal-carrying reward model
