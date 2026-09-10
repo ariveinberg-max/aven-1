@@ -494,12 +494,29 @@ def all_single_turn_pools():
     return pools
 
 
-def build_two_turn(pools, n):
+def build_multi_turn(pools, n, max_turns=4):
+    # v7: real dashboard usage (2026-09-10 live testing) showed the model splicing
+    # two unrelated memorized facts together mid-response when several short,
+    # unrelated turns (greeting, a declined math request, wrong arithmetic) sat in
+    # context before the real question -- e.g. "who was the first president" got
+    # answered "George Water freezes at 0 degrees Celsius.", blending the Washington
+    # fact with an unrelated water-freezing fact. The old build_two_turn() only ever
+    # produced exactly 2 unrelated turns, so the model had almost no training
+    # exposure to answering correctly with 3+ turns of unrelated clutter already in
+    # its 192-token context -- the real shape of an actual chat session. This
+    # generates 2-4 turn conversations instead of a fixed 2, still from randomly
+    # unrelated pool entries (deliberately: the point is robustness to *whatever*
+    # preceded the current turn, not topical continuity between turns).
+    # NOT YET VERIFIED to reduce splicing -- that requires finetuning on the
+    # regenerated corpus and re-testing the exact live prompts that exposed this,
+    # which was deferred this session for lack of free memory on this machine (see
+    # research/TASKS.md). Treat this as an untested hypothesis-driven data change
+    # until that finetune runs.
     flat = [ex for pool in pools.values() for ex in pool]
     out = []
     for _ in range(n):
-        a, b = random.choice(flat), random.choice(flat)
-        out.append([a, b])
+        turns = random.randint(2, max_turns)
+        out.append([random.choice(flat) for _ in range(turns)])
     return out
 
 
@@ -511,12 +528,12 @@ def render_multi(pairs):
     return '\n'.join(render_single(i, r) for i, r in pairs)
 
 
-def build(target_single=13000, target_multi=2200):
+def build(target_single=13000, target_multi=4000):
     pools = all_single_turn_pools()
     singles = [ex for pool in pools.values() for ex in pool]
     random.shuffle(singles)
     singles = singles[:target_single]
-    multis = build_two_turn(pools, target_multi)
+    multis = build_multi_turn(pools, target_multi)
 
     blocks = [render_single(i, r) for i, r in singles] + [render_multi(pair) for pair in multis]
     random.shuffle(blocks)
