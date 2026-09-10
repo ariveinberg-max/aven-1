@@ -113,6 +113,24 @@ FALLBACK_REPLIES = [
     "That's outside what I've been trained on. I can help with the kinds of things I've practiced.",
 ]
 
+# v8: live testing (2026-09-10) found "can u help me with a math problem?" got a
+# garbled reply blending a HELP_REPLIES fragment with a FALLBACK_REPLIES fragment --
+# not a multi-turn-context bug (ruled out separately), but a genuine data gap:
+# HELP_PROMPTS is only bare, topic-less requests ("Can you help me?"), and
+# FALLBACK_QUESTIONS is only direct out-of-scope questions, so "help me with X"
+# naming a specific task falls between both categories with nothing anchoring it.
+# These pair that exact phrasing shape with the honest FALLBACK_REPLIES (the model
+# genuinely can't help with most named tasks beyond what it was narrowly trained
+# on), so the two "help" shapes point at two different, well-anchored replies
+# instead of interpolating between them.
+HELP_WITH_TOPIC_PROMPTS = [
+    'Can you help me with a math problem?', 'Can you help me with my homework?',
+    'Can you help me with something complicated?', 'Can you help me write an essay?',
+    'Can you help me fix my code?', 'Can you help me plan a trip?',
+    'Could you help me with something hard?', 'Can you help with a physics question?',
+    'Can you help me with a science project?', 'Can you help me solve a puzzle?',
+]
+
 ANTONYMS = [
     ('hot', 'cold'), ('big', 'small'), ('fast', 'slow'), ('happy', 'sad'),
     ('light', 'dark'), ('up', 'down'), ('open', 'closed'), ('young', 'old'),
@@ -482,13 +500,14 @@ def all_single_turn_pools():
         'calendar': calendar_examples() * 4,
         'list': list_examples(800),
         'fallback': fallback_examples() * 6,
+        'help_with_topic': fixed_replies(HELP_WITH_TOPIC_PROMPTS, FALLBACK_REPLIES, weight=4),
         'continuation': continuation_examples(1400),
     }
     # Casual-phrasing duplicates: same correct response, informal wording (lowercase, no
     # punctuation, texting contractions) — the categories most likely to be typed casually.
     casual_sources = ['greeting', 'farewell', 'thanks', 'identity', 'help', 'wellbeing',
                        'arithmetic', 'antonym', 'calendar', 'list', 'comparison', 'fallback', 'fact',
-                       'open_ended']
+                       'open_ended', 'help_with_topic']
     for name in casual_sources:
         pools[f'{name}_casual'] = add_casual(pools[name], rate=0.6)
     return pools
