@@ -9,3 +9,9 @@ This command does not establish checkpoint provenance or training-data independe
 Validation: `.venv/bin/python -m unittest test_compare_capabilities test_evaluate_capabilities -v`.
 
 Current handoff: comparison utility added separately because both evaluation runners and their documentation already had uncommitted changes from another session. Those edits were reviewed and tested but not overwritten or included in this change. Real checkpoint selection and independent evaluation remain pending explicit agreement.
+
+## Regression checks and malformed reports
+
+Use `python compare_capabilities.py BEFORE.json AFTER.json --fail-on-regression` for an automated check. Exit 0 means the comparison passed with no newly incorrect cases; exit 1 means at least one previously correct case regressed; exit 2 means invalid/incompatible inputs or unreadable files. This checks individual cases even when the aggregate score stays unchanged. JSON output includes regression/improvement counts and a same-checkpoint indicator.
+
+Reports must contain valid SHA-256 identities, supporting-code hashes, a positive integer token budget, nonempty case IDs and prompts, positive integer prompt lengths and lists of accepted answer strings. In particular, a string cannot substitute for an answer list: that would turn membership into substring matching and permit false positives. Missing provenance is not silently treated as matching provenance. These are report-consistency checks, not cryptographic attestation of the original run.
