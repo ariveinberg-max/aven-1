@@ -6,8 +6,10 @@ here on whatever text you compile into the corpus. A trained tokenizer is
 tied to the corpus it learned from and is saved next to the checkpoint that
 uses it.
 """
+import hashlib
 import heapq
 import json
+from artifact_io import atomic_json
 
 
 class Tokenizer:
@@ -18,6 +20,12 @@ class Tokenizer:
     @property
     def vocab_size(self):
         return len(self.vocab)
+
+    def fingerprint(self):
+        """Identity includes ordered merge rules, not merely vocabulary size."""
+        ordered = sorted(self.merges.items(), key=lambda item: item[1])
+        payload = json.dumps([[a, b, idx] for (a, b), idx in ordered], separators=(',', ':'))
+        return hashlib.sha256(payload.encode('ascii')).hexdigest()
 
     @staticmethod
     def _stats(ids):
@@ -131,14 +139,21 @@ class Tokenizer:
 
     def save(self, path):
         ordered = sorted(self.merges.items(), key=lambda kv: kv[1])
-        path.write_text(json.dumps({'merges': [[a, b] for (a, b), _ in ordered]}), encoding='utf-8')
+        atomic_json(path, {'merges': [[a, b] for (a, b), _ in ordered]})
 
     def load(self, path):
         data = json.loads(path.read_text(encoding='utf-8'))
+        if not isinstance(data, dict) or not isinstance(data.get('merges'), list) or len(data['merges']) > 16384 - 256:
+            raise ValueError('Invalid tokenizer merge table.')
         vocab = {i: bytes([i]) for i in range(256)}
         merges = {}
         idx = 256
-        for a, b in data['merges']:
+        for pair in data['merges']:
+            if (not isinstance(pair, list) or len(pair) != 2
+                    or any(type(value) is not int or not 0 <= value < idx for value in pair)
+                    or tuple(pair) in merges):
+                raise ValueError(f'Invalid tokenizer merge at token {idx}.')
+            a, b = pair
             merges[(a, b)] = idx
             vocab[idx] = vocab[a] + vocab[b]
             idx += 1
