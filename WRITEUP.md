@@ -266,6 +266,23 @@ Finetuned 500 steps on the resulting 18 cleaned examples (repeated 3x to clear `
 
 **Reverted to the pre-RAFT checkpoint** (`checkpoints-pre-raft-v2-backup/`) rather than keep a net-negative trade — confirmed live afterward that all 3 previously-failing comparison prompts are correct again. Honest conclusion: RAFT's mechanism worked exactly as designed (the reward model correctly identified good candidates, most of them), but 500 steps of narrow reinforcement on only 18 examples was enough to measurably disturb a real, unrelated, already-correct capability — the same fundamental tension already documented for PPO in this project, showing up again in RAFT at a smaller scale. This isn't evidence RAFT is broken; it's evidence this particular run's data was too narrow relative to the rest of the model's trained behavior to apply safely without a broader mix or a smaller/more targeted step count. Not attempted again this session.
 
+## New capability categories: a real, precise negative result, and a second regression (2026-09-10)
+
+Trained the new `comprehension`/`instruction_following`/`code_reading` categories into the model (4000 steps, one continuous run from the stable step-5499 base, corpus grown 34,951 -> 38,044 blocks) and ran a genuine before/after comparison using the formal, frozen `evaluate_capabilities.py` suite -- not another live spot-check -- against a saved "before" report generated from the same pre-training checkpoint.
+
+**Result: 0% on every category, both before and after, including the three new ones.** But reading the actual per-case responses (not just the aggregate score) revealed something more precise and useful than "it didn't work":
+
+- `instructions-07` ("Write only the word amber.") -> **"meadow"** -- a different word from the same training list, not the requested one.
+- `instructions-09` ("Write the word quiet in uppercase.") -> **"OCEAN"** -- correct uppercase *format*, wrong word.
+- `code_reading`: 4 of 6 answers were literally the digit **"4"**, regardless of what the actual code did.
+- `comprehension-01`: answered with a real color word, just the wrong one.
+
+**Honest diagnosis: the new training taught surface format (bare single-word answers, sometimes correct casing) but not the underlying skill of reading the specific prompt and using its actual content.** The model learned "when asked to write one word, output some plausible trained word" rather than "copy the word actually named in the instruction." This is a more precise, useful negative result than "no generalization" -- it tells us exactly what's missing (content-binding to the specific prompt, not just matching an output shape) rather than leaving the failure unexplained.
+
+**A second, more serious problem: the SAME training run caused the original flagship bug from the start of this session to come back, worse.** Live regression testing (not the formal suite, which doesn't cover fact-splicing) found "who was the first president of the united states" now answered **"Antarctic"** -- a single incoherent word fragment, worse than the original "George Water freezes at 0 degrees Celsius." bug this session opened with. Also regressed: "who wrote pride and prejudice" (answered with an unrelated Einstein fact) and the `comparison` category (self-contradictory "No, 7 is not greater than 7."). One genuine improvement survived: the day-after-Sunday wraparound bug is now fixed. Net assessment: not worth keeping. **Reverted to `checkpoints-pre-raft-v2-backup` (step 5499)** -- confirmed live afterward that all three regressions are gone.
+
+This is the third time this session that a large finetune pass on a meaningfully bigger/different corpus destabilized already-correct behavior (after the messy-chain finding and the RAFT finding). Growing evidence this isn't three separate flukes: **a 58M-parameter model may have a real, hard capacity ceiling for how much can be safely layered onto one checkpoint's instruction-tuning stage within a session**, not simply a matter of finding the right step count each time. The two saved eval reports (`research/evaluation/report-before-new-categories.json`, `report-after-new-categories.json`) are the first real before/after artifacts this project has for a training change -- worth reusing as a template for future attempts rather than trusting live spot-checks alone.
+
 ## What's next
 
 - Label substantially more real preference comparisons — the PPO experiments above suggest 34 isn't enough for stable direct policy optimization, even though it's already enough for RAFT and a genuinely signal-carrying reward model
