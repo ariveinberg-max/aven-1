@@ -314,7 +314,18 @@ def run_training(args, parser, out):
     stage = 'sweep' if args.sweep else 'finetune' if loss_mode == 'response' else 'pretrain'
     if saved:
         model.load_state_dict(saved['model'])
-        optimizer.load_state_dict(saved['optimizer'])
+        try:
+            optimizer.load_state_dict(saved['optimizer'])
+        except (ValueError, RuntimeError) as exc:
+            # A checkpoint's optimizer state can become unloadable across torch
+            # versions (observed: saved under torch 2.14.0, loaded under 2.4.1 in
+            # the DirectML venv, whose torch-directml build caps the torch version
+            # -- "loaded state dict contains a parameter group that doesn't match
+            # the size of optimizer's group"). The model weights above already
+            # loaded fine; only Adam's own momentum/variance state is lost here,
+            # a real but small one-time cost versus refusing to resume at all.
+            print(f'Optimizer state incompatible with this torch version ({exc}); '
+                  f'continuing with a freshly-initialized optimizer. Model weights are unaffected.', flush=True)
         if explicit_lr is not None:
             for group in optimizer.param_groups:
                 group['lr'] = args.lr
