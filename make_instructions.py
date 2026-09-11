@@ -490,7 +490,10 @@ def comprehension_examples(n):
     return out
 
 
-INSTR_WORDS = ['amber', 'quartz', 'meadow', 'velvet', 'harbor', 'lantern', 'thicket', 'copper',
+# 'amber' deliberately excluded: capability-v1's frozen instructions-07 item is
+# literally "Write only the word amber." -- an exact string match with one of this
+# module's own templates, caught by evaluate_capabilities.py's overlap check.
+INSTR_WORDS = ['quartz', 'meadow', 'velvet', 'harbor', 'lantern', 'thicket', 'copper',
                'willow', 'granite', 'cinder', 'orchid']
 INSTR_PHRASES = ['the quiet river', 'a sudden storm', 'three old maps', 'the last candle']
 INSTRUCTION_FOLLOWING_TEMPLATES = [
@@ -512,6 +515,15 @@ def instruction_following_examples(n):
             phrase = random.choice(INSTR_PHRASES)
             out.append((f'Repeat exactly: {phrase}', phrase))
     return out
+
+
+# Deliberately NOT "What is printed? Output only the value." -- that exact phrase
+# is the frozen capability-v1 eval's closing line for every one of its code_reading
+# items, and evaluate_capabilities.py's overlap check correctly flagged it as a
+# training/eval collision the first time this was tried. Real phrasing variety here
+# instead of a single fixed sentence.
+CODE_READING_ASKS = ['What does this print?', "What's the output?", 'Give only the resulting value.',
+                      'Show just what gets printed.', 'What value does this produce?']
 
 
 def code_reading_examples(n):
@@ -539,7 +551,7 @@ def code_reading_examples(n):
             vals = random.sample(range(1, 50), random.choice([2, 3, 4]))
             code = f'lst = [{", ".join(map(str, vals))}]\nprint(len(lst))'
             answer = str(len(vals))
-        out.append((f'Python:\n{code}\nWhat is printed? Output only the value.', answer))
+        out.append((f'Python:\n{code}\n{random.choice(CODE_READING_ASKS)}', answer))
     return out
 
 
