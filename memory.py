@@ -1,8 +1,8 @@
 """SQLite-backed notes storage. Not part of the neural network.
 
 This is a plain database table you read, write, and delete directly. Saving
-a note here never changes the model's weights, and the model never reads
-this database during training or generation. It exists so you have a place
+a note here never changes the model's weights, and training never reads
+this database. Explicit /recall requests retrieve excerpts through recall.py. It exists so you have a place
 to keep facts, snippets, or reminders that is separate from what the
 network has learned, and separate from the raw training-data workspace.
 """

@@ -20,6 +20,7 @@ import torch
 from brain import Brain, Config
 from reward_model import RewardModel
 from tokenizer import Tokenizer
+from artifact_io import validate_tokenizer
 
 ROOT = Path(__file__).resolve().parent
 
@@ -85,6 +86,8 @@ def main():
           f'({reward_saved.get("val_count", "?")} held out).', flush=True)
 
     tokenizer = Tokenizer().load(ROOT/'checkpoints/tokenizer.json')
+    validate_tokenizer(saved, tokenizer, 'Policy checkpoint')
+    validate_tokenizer(reward_saved, tokenizer, 'Reward checkpoint')
 
     blocks = []
     reward_gaps = []

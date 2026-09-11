@@ -1,0 +1,36 @@
+{
+  "device": "cpu",
+  "threads": 1,
+  "seed": 19,
+  "torch": "2.14.0",
+  "platform": "macOS-26.3.1-arm64-arm-64bit",
+  "config": {
+    "width": 128,
+    "layers": 4,
+    "heads": 4,
+    "context": 128,
+    "vocab": 256,
+    "dropout": 0.0,
+    "attn_scale": null
+  },
+  "repetitions": 5,
+  "statistic": "median; alternating order; one warmup per mode",
+  "results": [
+    {
+      "case": "within_context",
+      "new_tokens": 64,
+      "uncached_seconds": 0.06254699999408331,
+      "cached_seconds": 0.02154904200870078,
+      "speedup": 2.902542023391524,
+      "identical_output": true
+    },
+    {
+      "case": "full_context",
+      "new_tokens": 32,
+      "uncached_seconds": 0.05320466699777171,
+      "cached_seconds": 0.05277912499150261,
+      "speedup": 1.0080626953618046,
+      "identical_output": true
+    }
+  ]
+}

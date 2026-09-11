@@ -1,5 +1,6 @@
 """A byte-level causal Transformer. No downloaded models or pretrained weights."""
 from dataclasses import dataclass
+import math
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -72,15 +73,28 @@ class Brain(nn.Module):
         return logits, loss, activity
 
     @torch.no_grad()
-    def generate(self, prompt, count=160, temperature=0.8, tokenizer=None, stop_text=None):
+    def generate(self, prompt, count=160, temperature=0.8, tokenizer=None, stop_text=None, use_cache=True):
         """tokenizer=None assumes raw UTF-8 bytes (vocab=256), matching older checkpoints.
         stop_text: if the decoded output ends with this string, stop early (used by fine-tuned checkpoints)."""
+        if not isinstance(count, int) or count < 0:
+            raise ValueError('Count must be a nonnegative integer.')
+        if not math.isfinite(temperature) or temperature < 0:
+            raise ValueError('Temperature must be finite and nonnegative.')
+        from inference import cached_logits
         self.eval()
         raw = tokenizer.encode(prompt) if tokenizer else (list(prompt.encode('utf-8')) or [10])
         raw = raw or [10]
         ids = torch.tensor([raw], device=next(self.parameters()).device)
+        cache = None
+        generated = []
         for _ in range(count):
-            logits, _, _ = self(ids[:, -self.config.context:])
+            if use_cache:
+                if cache is None or cache[0][0].shape[2] >= self.config.context:
+                    logits, cache = cached_logits(self, ids[:, -self.config.context:])
+                else:
+                    logits, cache = cached_logits(self, ids[:, -1:], cache)
+            else:
+                logits, _, _ = self(ids[:, -self.config.context:])
             logits = logits[:, -1]
             if temperature == 0.0:
                 next_id = torch.argmax(logits, dim=-1, keepdim=True)  # greedy: always the top token, no randomness
@@ -90,16 +104,18 @@ class Brain(nn.Module):
                 logits = logits.masked_fill(logits < cutoff, float('-inf'))
                 next_id = torch.multinomial(F.softmax(logits, dim=-1), 1)
             ids = torch.cat([ids, next_id], dim=1)
+            generated.append(next_id.item())
             if stop_text:
-                tail = ids[0, -len(stop_text)-4:].tolist()
-                decoded = tokenizer.decode(tail) if tokenizer else bytes(tail).decode('utf-8', errors='replace')
-                if decoded.endswith(stop_text):
+                decoded = tokenizer.decode(generated) if tokenizer else bytes(generated).decode('utf-8', errors='replace')
+                # A BPE token can contain both the marker and following text.
+                # Search generated output only so a marker in the prompt cannot stop us.
+                if stop_text in decoded:
                     break
         _, _, activity = self(ids[:, -self.config.context:], inspect=True)
-        out_ids = ids[0].tolist()
-        text = tokenizer.decode(out_ids) if tokenizer else bytes(out_ids).decode('utf-8', errors='replace')
-        if stop_text and text.endswith(stop_text):
-            text = text[:-len(stop_text)]
+        completion = tokenizer.decode(generated) if tokenizer else bytes(generated).decode('utf-8', errors='replace')
+        if stop_text:
+            completion = completion.split(stop_text, 1)[0]
+        text = prompt + completion
         return text, activity
 
 

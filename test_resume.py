@@ -3,6 +3,7 @@ import contextlib
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import signal
 import sys
@@ -143,6 +144,155 @@ class ResumeTests(unittest.TestCase):
         self.assertEqual(after['lineage_id'], self.saved['lineage_id'])
         self.assertNotEqual(after['run_id'], self.saved['run_id'])
         self.assertEqual(after['step'], 1)
+
+
+    def test_tokenizer_mismatch_rejected_before_training(self):
+        from tokenizer import Tokenizer
+        tok = Tokenizer()
+        tok.train(b'ababababab', 257)
+        tok.save(self.root / 'checkpoints/tokenizer.json')
+        before = self.checkpoint.read_bytes()
+        with self.assertRaises(SystemExit) as error:
+            self.invoke('--resume')
+        self.assertEqual(error.exception.code, 2)
+        self.assertEqual(before, self.checkpoint.read_bytes())
+
+    def test_merge_identity_guard_with_same_vocabulary(self):
+        from tokenizer import Tokenizer
+        tok = Tokenizer()
+        tok.train(b'ababababab', 257)
+        # Construct a consistent tiny checkpoint with a 257-token vocabulary.
+        model = train.Brain(train.Config(width=16, layers=1, heads=2, context=8, vocab=257))
+        saved = dict(self.saved, config=vars(model.config), model=model.state_dict(),
+                     tokenizer_sha256=tok.fingerprint())
+        torch.save(saved, self.checkpoint)
+        other = Tokenizer()
+        other.train(b'cdcdcdcdcd', 257)
+        other.save(self.root / 'checkpoints/tokenizer.json')
+        with patch.object(train, 'Brain') as constructor:
+            with self.assertRaises(SystemExit) as error:
+                self.invoke('--resume')
+            self.assertEqual(error.exception.code, 2)
+            constructor.assert_not_called()
+
+    def test_output_directory_isolation(self):
+        before = self.checkpoint.read_bytes()
+        alternate = self.root / 'other-run'
+        self.invoke('--output-dir', str(alternate), '--width', '16', '--layers', '1',
+                    '--heads', '2', '--context', '8', '--vocab', '256')
+        self.assertTrue((alternate / 'latest.pt').exists())
+        self.assertEqual(before, self.checkpoint.read_bytes())
+        self.invoke('--output-dir', str(alternate), '--resume')
+        self.assertEqual(torch.load(alternate / 'latest.pt', weights_only=True)['step'], 2)
+
+    def test_nonfinite_gradient_preserves_last_checkpoint(self):
+        before = self.checkpoint.read_bytes()
+        with patch.object(torch.nn.utils, 'clip_grad_norm_', side_effect=RuntimeError('nonfinite gradient')):
+            with self.assertRaisesRegex(RuntimeError, 'nonfinite'):
+                self.invoke('--resume')
+        self.assertEqual(before, self.checkpoint.read_bytes())
+        self.assertEqual(json.loads((self.root / 'checkpoints/status.json').read_text())['status'], 'error')
+
+    def test_legacy_cache_not_reused(self):
+        cache_dir = self.root / 'data/.cache'
+        for p in cache_dir.glob('*.bin'):
+            p.unlink()
+        # This was previously accepted solely because corpus and vocab size matched.
+        legacy = cache_dir / f"{self.saved['data_sha256'][:16]}-256.bin"
+        legacy.write_bytes(b'corrupt legacy data')
+        self.invoke('--resume')
+        self.assertEqual(legacy.read_bytes(), b'corrupt legacy data')
+        self.assertEqual(len(list(cache_dir.glob('v2-*.bin'))), 1)
+
+    def test_response_finetune_and_resume(self):
+        self.data.write_text(('### Instruction:\nChoose a color\n\n### Response:\nBlue is a color.\n<|end|>\n\n') * 100)
+        self.invoke('--finetune', '--loss-mode', 'response')
+        saved = torch.load(self.checkpoint, weights_only=True)
+        self.assertEqual(saved['loss_mode'], 'response')
+        self.assertEqual(saved['stage'], 'finetune')
+        self.assertEqual(saved['step'], 1)
+        self.invoke('--resume')
+        saved = torch.load(self.checkpoint, weights_only=True)
+        self.assertEqual(saved['loss_mode'], 'response')
+        self.assertEqual(saved['step'], 2)
+        with self.assertRaises(SystemExit):
+            self.invoke('--resume', '--loss-mode', 'all')
+
+    def test_new_finetune_corpus_resets_phase_history(self):
+        self.data.write_text('First fine tuning text with novel words.\n' * 130)
+        self.invoke('--finetune')
+        self.invoke('--resume')
+        self.assertEqual(torch.load(self.checkpoint, weights_only=True)['step'], 2)
+        self.data.write_text('Second fine tuning text with other words.\n' * 130)
+        self.invoke('--finetune')
+        saved = torch.load(self.checkpoint, weights_only=True)
+        self.assertEqual(saved['step'], 1)
+        self.assertEqual(saved['starting_step'], 2)
+        self.assertEqual(len(saved['history']), 2)
+
+    def test_resume_inherits_learning_rate_unless_explicit(self):
+        self.invoke('--resume', '--lr', '0.00001')
+        self.invoke('--resume')
+        saved = torch.load(self.checkpoint, weights_only=True)
+        self.assertEqual(saved['optimizer']['param_groups'][0]['lr'], 0.00001)
+        self.invoke('--resume', '--lr', '0.00002')
+        saved = torch.load(self.checkpoint, weights_only=True)
+        self.assertEqual(saved['optimizer']['param_groups'][0]['lr'], 0.00002)
+
+    def test_init_from_branches_without_modifying_parent(self):
+        before = self.checkpoint.read_bytes()
+        self.data.write_text(('### Instruction:\nName a color\n\n### Response:\nBlue.\n<|end|>\n\n') * 100)
+        destination = self.root/'response-experiment'
+        self.invoke('--init-from', str(self.checkpoint.parent), '--output-dir', str(destination),
+                    '--loss-mode', 'response')
+        self.assertEqual(self.checkpoint.read_bytes(), before)
+        child = torch.load(destination/'latest.pt', weights_only=True)
+        self.assertEqual(child['parent_checkpoint_sha256'], hashlib.sha256(before).hexdigest())
+        self.assertEqual(child['loss_mode'], 'response')
+        self.assertEqual(child['stage'], 'finetune')
+        self.assertEqual(child['step'], 1)
+        self.assertTrue((destination/'tokenizer.json').exists())
+
+    def test_retry_preserves_original_step_budget(self):
+        original_step = torch.optim.AdamW.step
+        calls = 0
+        def interrupted_step(optimizer, *args, **kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 22:
+                raise RuntimeError('simulated interrupted chunk')
+            return original_step(optimizer, *args, **kwargs)
+        with patch.dict(os.environ, {'AVEN_BUDGET_ID': 'test-chunk-1'}):
+            with patch.object(torch.optim.AdamW, 'step', interrupted_step):
+                with self.assertRaisesRegex(RuntimeError, 'interrupted'):
+                    self.invoke('--resume', '--steps', '40')
+            saved = torch.load(self.checkpoint, weights_only=True)
+            self.assertEqual(saved['step'], 20)
+            self.assertEqual(saved['budget_target'], 41)
+            self.invoke('--resume', '--steps', '40')
+            saved = torch.load(self.checkpoint, weights_only=True)
+            self.assertEqual(saved['step'], 41)
+            before = {k: v.clone() for k, v in saved['model'].items()}
+            # A crash after the final save must not train the entire budget again.
+            self.invoke('--resume', '--steps', '40')
+            saved = torch.load(self.checkpoint, weights_only=True)
+            self.assertEqual(saved['step'], 41)
+            self.assertTrue(all(torch.equal(value, saved['model'][key]) for key, value in before.items()))
+        with patch.dict(os.environ, {'AVEN_BUDGET_ID': 'test-chunk-2'}):
+            self.invoke('--resume', '--steps', '5')
+            self.assertEqual(torch.load(self.checkpoint, weights_only=True)['step'], 46)
+
+    def test_cpu_dropout_resume_matches_uninterrupted_updates(self):
+        self.invoke('--resume', '--dropout', '0.2')
+        start = self.checkpoint.read_bytes()
+        self.invoke('--resume', '--steps', '4')
+        uninterrupted = torch.load(self.checkpoint, weights_only=True)
+        self.checkpoint.write_bytes(start)
+        self.invoke('--resume', '--steps', '2')
+        self.invoke('--resume', '--steps', '2')
+        resumed = torch.load(self.checkpoint, weights_only=True)
+        self.assertEqual(uninterrupted['step'], resumed['step'])
+        self.assertTrue(all(torch.equal(value, resumed['model'][key]) for key, value in uninterrupted['model'].items()))
 
 
 if __name__ == '__main__':

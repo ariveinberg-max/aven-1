@@ -34,3 +34,14 @@ A genuinely separate held-out text collection and token loss/perplexity evaluati
 ## Validation
 
 Run `.venv/bin/python -m unittest test_evaluate_capabilities -v`. Tests use a freshly initialized tiny model in a temporary directory, verify all 30 cases are processed, check exact-match and overlap behavior, and confirm checkpoint/tokenizer hashes remain unchanged and wrong identity aborts without a report. Tiny-model outputs are harness validation, not Aven research results.
+
+## Streaming evaluation update
+
+The overlap scan now normalizes fixed-size text chunks with boundary carry, keeping
+the original eight-word substring protocol and prompt-span ordering without reading
+entire training corpora into memory. Model loading pins the same open checkpoint
+file that was hashed, protecting report identity during atomic saves. Reports also
+record hashes of the model, tokenizer and artifact-loading source files.
+External-text evaluation is available through `eval_heldout.py`; its `external-text-v2`
+report records bounded-chunk tokenization. Dataset folder exclusion alone does not
+prove a historical checkpoint was never trained on that text.

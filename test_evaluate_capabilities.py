@@ -22,6 +22,27 @@ class EvaluationTests(unittest.TestCase):
             p=Path(d)/'corpus.txt';p.write_text('ONE two three four five six seven eight nine')
             self.assertEqual(len(overlap([{'id':'a','prompt':'one two three four five six seven eight'}],[p])),1)
 
+    def test_streaming_overlap_matches_whole_file_protocol(self):
+        cases = [dict(id='a', prompt='one two three four five six seven eight nine'),
+                 dict(id='b', prompt='STRASSE two three four five six seven eight'),
+                 dict(id='c', prompt='a question too short')]
+        text = 'two three four five six seven eight nine ' + ('unrelated ' * 30) + 'ONE\tTWO\nthree  four five six seven eight STRAßE two three four five six seven eight'
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'corpus.txt'
+            path.write_text(text)
+            normalized = ' '.join(text.casefold().split())
+            expected = []
+            for case in cases:
+                words = case['prompt'].casefold().split()
+                for index in range(max(0, len(words) - 7)):
+                    span = ' '.join(words[index:index+8])
+                    if span in normalized:
+                        expected.append(dict(case_id=case['id'], corpus=str(path), matching_span=span))
+                        break
+            for chunk_size in [1, 2, 7, 31, 1024]:
+                with self.subTest(chunk_size=chunk_size):
+                    self.assertEqual(overlap(cases, [path], chunk_size=chunk_size), expected)
+
     def test_runner_and_identity_guard(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d); cp=root/'latest.pt'; tk=root/'tokenizer.json'; out=root/'report.json'

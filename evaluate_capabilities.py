@@ -5,10 +5,12 @@ import hashlib
 import json
 from pathlib import Path
 import platform
+import re
 import subprocess
 import torch
 from brain import Brain, Config
 from tokenizer import Tokenizer
+from artifact_io import validate_tokenizer, load_checkpoint_snapshot, atomic_json
 
 
 def sha(path):
@@ -24,17 +26,41 @@ def score(response, answers):
     return response.strip() in answers
 
 
-def overlap(cases, paths):
+def overlap(cases, paths, chunk_size=1024 * 1024):
+    """Bounded-memory equivalent of normalized eight-word substring matching."""
+    if chunk_size < 1:
+        raise ValueError('Chunk size must be positive.')
+    patterns = []
+    for case in cases:
+        words = case['prompt'].casefold().split()
+        patterns.append([' '.join(words[i:i+8]) for i in range(max(0, len(words) - 7))])
+    longest = max((len(span) for spans in patterns for span in spans), default=0)
+    if not longest:
+        return []
     findings = []
     for path in paths:
-        text = ' '.join(Path(path).read_text().casefold().split())
-        for case in cases:
-            words = case['prompt'].casefold().split()
-            for i in range(max(0, len(words) - 7)):
-                span = ' '.join(words[i:i+8])
-                if span in text:
-                    findings.append(dict(case_id=case['id'], corpus=str(path), matching_span=span))
-                    break
+        found = {}
+        carry = ''
+        last_space = True
+        with Path(path).open(encoding='utf-8') as source:
+            while chunk := source.read(chunk_size):
+                normalized = re.sub(r'\s+', ' ', chunk.casefold())
+                if last_space and normalized.startswith(' '):
+                    normalized = normalized[1:]
+                if normalized:
+                    last_space = normalized.endswith(' ')
+                window = carry + normalized
+                for case_index, spans in enumerate(patterns):
+                    # Keep the lowest prompt-span index, matching the original
+                    # whole-file algorithm even when a later span appears first.
+                    for span_index in range(found.get(case_index, len(spans))):
+                        if spans[span_index] in window:
+                            found[case_index] = span_index
+                            break
+                carry = window[-(longest - 1):] if longest > 1 else ''
+        for index, case in enumerate(cases):
+            if index in found:
+                findings.append(dict(case_id=case['id'], corpus=str(path), matching_span=patterns[index][found[index]]))
     return findings
 
 
@@ -64,12 +90,20 @@ def main():
     if hits: p.error('Evaluation/corpus overlap detected: ' + json.dumps(hits))
     torch.manual_seed(42)
     torch.set_num_threads(4)
-    saved = torch.load(a.checkpoint, map_location='cpu', weights_only=True)
+    try:
+        saved, _ = load_checkpoint_snapshot(a.checkpoint, checkpoint_hash)
+    except ValueError as exc:
+        p.error(str(exc))
     model = Brain(Config(**saved['config']))
     model.load_state_dict(saved['model'], strict=True)
     model.to(a.device).eval()
     tok = Tokenizer().load(a.tokenizer)
-    if tok.vocab_size != model.config.vocab: p.error('Tokenizer/model vocabulary mismatch.')
+    try:
+        validate_tokenizer(saved, tok)
+        if sha(a.tokenizer) != tokenizer_hash:
+            raise ValueError('Tokenizer changed during evaluation setup.')
+    except ValueError as exc:
+        p.error(str(exc))
     results = []
     for case in cases:
         prompt = case['prompt'] + '\nAnswer:' if a.format == 'plain' else f"### Instruction:\n{case['prompt']}\n\n### Response:\n"
@@ -101,12 +135,12 @@ def main():
                   parameters=sum(p.numel() for p in model.parameters()), device=a.device,
                   torch_version=str(torch.__version__), python_version=platform.python_version(),
                   code_revision=subprocess.check_output(['git','rev-parse','HEAD'],cwd=Path(__file__).parent,text=True).strip(),
-                  evaluator_sha256=sha(__file__), prompt_format=a.format, max_new_tokens=a.max_new_tokens,
+                  evaluator_sha256=sha(__file__), code_sha256={name: sha(Path(__file__).parent/name) for name in ('brain.py', 'tokenizer.py', 'artifact_io.py')}, prompt_format=a.format, max_new_tokens=a.max_new_tokens,
                   decoding='greedy; first newline or <|end|>; strict case-sensitive exact match after stripping edge whitespace',
                   overlap_check='8-word exact normalized spans; no hits' if a.corpus else 'NOT CHECKED',
                   corpora=[dict(path=str(x),sha256=sha(x)) for x in a.corpus], categories=dict(categories),results=results)
     a.output.parent.mkdir(parents=True,exist_ok=True)
-    with a.output.open('x') as f: json.dump(report,f,indent=2)
+    atomic_json(a.output, report, overwrite=False)
     print(json.dumps(report['categories'],indent=2))
     print('Report:',a.output)
 

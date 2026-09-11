@@ -35,6 +35,7 @@ import torch
 import torch.nn.functional as F
 from brain import Brain, Config
 from tokenizer import Tokenizer
+from artifact_io import validate_tokenizer
 from value_model import ValueModel
 import preferences
 
@@ -135,6 +136,8 @@ def main():
         raise SystemExit('PPO needs a fine-tuned checkpoint, not just pretraining.')
     config = Config(**saved['config'])
     tokenizer = Tokenizer().load(ROOT/'checkpoints/tokenizer.json')
+    validate_tokenizer(saved, tokenizer, 'Policy checkpoint')
+    validate_tokenizer(reward_saved, tokenizer, 'Reward checkpoint')
 
     ptx_data = None
     if args.ptx_coef > 0:

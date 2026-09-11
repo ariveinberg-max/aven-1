@@ -36,6 +36,26 @@ class TokenizerEncodeTests(unittest.TestCase):
         ids = self.tok.encode_ids(self.text)
         self.assertEqual(self.tok.decode(ids), self.text.decode('utf-8'))
 
+    def test_fingerprint_distinguishes_equal_size_vocabularies(self):
+        left, right = Tokenizer(), Tokenizer()
+        left.train(b'ababababab', 257)
+        right.train(b'cdcdcdcdcd', 257)
+        self.assertEqual(left.vocab_size, right.vocab_size)
+        self.assertNotEqual(left.fingerprint(), right.fingerprint())
+
+    def test_malformed_merges_rejected_without_changing_tokenizer(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        before = self.tok.fingerprint()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'tokenizer.json'
+            for merges in [[[999, 1]], [[1, 2], [1, 2]], [[True, 2]], [[1]], 'wrong']:
+                path.write_text(json.dumps({'merges': merges}))
+                with self.assertRaises(ValueError):
+                    self.tok.load(path)
+                self.assertEqual(self.tok.fingerprint(), before)
+
     def test_faster_than_naive_at_this_scale(self):
         import time
         t0 = time.time(); naive_encode_ids(self.tok, self.text); t_naive = time.time() - t0

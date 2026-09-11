@@ -43,8 +43,8 @@ button:disabled{opacity:.35;cursor:not-allowed}
 <div id="notice" class="notice" hidden></div>
 <div id="chatLog" class="chatlog"></div>
 <div class="composer">
-<div class="row"><textarea id="chatInput" placeholder="Ask something…" rows="1"></textarea><button id="chatSend" disabled>Send</button><button id="chatClear" class="secondary">Clear</button></div>
-<p class="hint">Small model trained from scratch on this Mac. Expect narrow, sometimes repetitive answers.</p>
+<div class="row"><textarea id="chatInput" placeholder="Ask something, calculate (2+3)*4, or /recall a topic…" maxlength="2000" rows="1"></textarea><button id="chatSend" disabled>Send</button><button id="chatClear" class="secondary">Clear</button></div>
+<p class="hint">Small model trained from scratch. Calculations and saved-note recall use local tools.</p>
 <div id="msg" role="status"></div>
 </div>
 </div>
@@ -66,9 +66,10 @@ async function sendChat(){
  chatHistory.push({role:'assistant',content:'…thinking…',pending:true});
  renderChat();
  try{
-  let d=await api('chat',{messages:chatHistory.filter(m=>!m.pending).map(m=>({role:m.role,content:m.content}))});
+  let d=await api('chat',{messages:chatHistory.filter(m=>!m.pending).slice(-19).map(m=>({role:m.role,content:m.content}))});
   chatHistory.pop();
   chatHistory.push({role:'assistant',content:d.reply||'(empty response)'});
+  $('msg').textContent=d.tool==='calculator'?'Calculated exactly':d.tool==='memory'?'Retrieved from saved notes':d.context?.omitted_messages?'Older messages omitted to fit this model’s context':'';
  }catch(e){
   chatHistory.pop();
   $('msg').textContent=e.message;
@@ -78,23 +79,25 @@ async function sendChat(){
 $('chatSend').onclick=sendChat;
 $('chatInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat()}});
 $('chatInput').addEventListener('input',()=>{$('chatInput').style.height='auto';$('chatInput').style.height=Math.min($('chatInput').scrollHeight,160)+'px'});
-$('chatClear').onclick=()=>{chatHistory=[];renderChat()};
+$('chatClear').onclick=()=>{if(!busy){chatHistory=[];renderChat()}};
 
 async function poll(){
  try{
   let r=await fetch('/api/status');let state=await r.json();
-  ready=state.stage==='finetune'&&!state.running&&state.checkpoint;
+  const modelReady=state.stage==='finetune'&&!state.running&&state.checkpoint;
+  ready=true;
   $('chatSend').disabled=!ready||busy;$('chatInput').disabled=!ready;
-  $('stage').textContent=ready?'READY':(state.running?'TRAINING…':'NOT READY');
+  $('stage').textContent=modelReady?'READY':'TOOLS READY';
   $('stage').classList.toggle('live',ready);
   let notice=$('notice');
-  if(!ready){
+  if(!modelReady){
    notice.hidden=false;
-   notice.textContent=state.running?'Training is running — chat will be available once it finishes.':'This checkpoint isn\'t fine-tuned for chat yet. Use the Dashboard to run the fine-tuning stage first.';
+   notice.textContent=state.running?'Training is running. Calculations and /recall searches are available now; model answers resume after training.':'Calculations and /recall searches are ready. Model answers need a fine-tuned checkpoint.';
   }else{
    notice.hidden=true;
   }
  }catch(e){
+  ready=false;$('chatSend').disabled=true;
   $('stage').textContent='OFFLINE';
   $('notice').hidden=false;
   $('notice').textContent='Cannot reach the local server.';
