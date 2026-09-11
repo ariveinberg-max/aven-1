@@ -13,6 +13,9 @@ import memory
 import sources
 import preferences
 import random
+from recall import recall_query, answer_recall
+from prompting import build_chat_prompt
+from run_lock import writer_active
 from tools.calculator import answer_arithmetic
 
 ROOT = Path(__file__).resolve().parent
@@ -35,6 +38,27 @@ PREFERENCE_PROMPTS = [
     'Who are you?', 'What are you?', 'Tell me about yourself', 'Are you ChatGPT?',
     'Goodbye', 'Bye', "That's all, bye",
     'Thank you', 'Thanks a lot', 'I appreciate it',
+
+    # Added 2026-09-10: 'What makes a good friend?' (the exact prompt the note above
+    # called out as having zero trained variety) now genuinely does -- this session
+    # added an OPEN_ENDED category to make_instructions.py, 9 topics each with 3
+    # hand-written, genuinely different multi-sentence answers, specifically to fix
+    # the tie/incoherence problem this file's own history documents. Also added
+    # HELP_WITH_TOPIC_PROMPTS (paired with FALLBACK_REPLIES, 3 real variants each).
+    # Caveat, also documented this session in WRITEUP.md: which specific prompt
+    # shows real coherent variance vs. a tie vs. incoherent noise is NOT stable
+    # across training checkpoints -- a prompt that's great here today may not be
+    # next time this checkpoint changes. That's a reason to keep the pool large and
+    # diverse (so a few going stale doesn't matter much), not a reason to avoid
+    # adding more.
+    'What makes a good friend?', 'Is it better to be cautious or take risks?',
+    'Would you rather be invisible or be able to fly?', 'What is more important, money or happiness?',
+    'Is it better to work alone or with a team?', 'What is the best way to learn something new?',
+    'Do you think technology makes life better or worse?', 'What is more important, talent or hard work?',
+    'Should people always tell the truth, even if it hurts?',
+    'Can you help me with a math problem?', 'Can you help me with my homework?',
+    'Can you help me with something complicated?', 'Can you help me write an essay?',
+    'Can you help me fix my code?', 'Can you help me plan a trip?',
 ]
 
 
@@ -65,11 +89,14 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == '/api/status':
             p = ROOT/'checkpoints/status.json'
             state = json.loads(p.read_text()) if p.exists() else {'status': 'ready', 'step': 0, 'history': []}
-            running = process is not None and process.poll() is None
+            panel_running = process is not None and process.poll() is None
+            running = panel_running or writer_active(ROOT/'checkpoints')
             if state['status'] == 'training' and not running:
                 state['status'] = 'interrupted'
-            state.update(running=running, checkpoint=(ROOT/'checkpoints/latest.pt').exists(), device=device_name())
-            if process is not None and process.poll() not in (None, 0):
+            if running and not panel_running and state['status'] != 'training':
+                state['status'] = 'preparing'
+            state.update(training_owner='panel' if panel_running else 'external' if running else None, running=running, checkpoint=(ROOT/'checkpoints/latest.pt').exists(), device=device_name())
+            if not running and process is not None and process.poll() not in (None, 0):
                 state.update(status='error', error=(ROOT/'work/train.log').read_text()[-2000:])
             return self.reply(state)
         elif self.path == '/api/memory':
@@ -102,7 +129,10 @@ class Handler(BaseHTTPRequestHandler):
             if size < 0 or size > 1_000_000:
                 raise ValueError('Request too large. Use the data folder for larger text files.')
             body = json.loads(self.rfile.read(size) or b'{}')
-            running = process is not None and process.poll() is None
+            if not isinstance(body, dict):
+                raise ValueError('Request body must be a JSON object.')
+            panel_running = process is not None and process.poll() is None
+            running = panel_running or writer_active(ROOT/'checkpoints')
             if self.path == '/api/train':
                 if running:
                     raise ValueError('Training is already running.')
@@ -121,7 +151,9 @@ class Handler(BaseHTTPRequestHandler):
                     process = subprocess.Popen(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
                 self.reply({'ok': True})
             elif self.path == '/api/stop':
-                if running:
+                if running and not panel_running:
+                    raise ValueError('Training belongs to an external process. Pause it in its terminal.')
+                if panel_running:
                     process.terminate()
                 self.reply({'ok': True})
             elif self.path == '/api/data':
@@ -157,6 +189,23 @@ class Handler(BaseHTTPRequestHandler):
                     text = prompt + '\n' + text[len(model_prompt):]
                 self.reply({'text': text, 'activity': activity, 'step': saved['step'], 'stage': saved.get('stage', 'pretrain')})
             elif self.path == '/api/chat':
+                messages = body.get('messages', [])
+                if (not isinstance(messages, list) or not 1 <= len(messages) <= 20
+                        or any(not isinstance(m, dict) or m.get('role') not in ('user', 'assistant')
+                               or not isinstance(m.get('content'), str) for m in messages)
+                        or messages[-1]['role'] != 'user'):
+                    raise ValueError('Send 1–20 user/assistant messages, ending with a user message.')
+                last_content = messages[-1]['content']
+                if len(last_content) > 2000:
+                    raise ValueError('Keep each message under 2000 characters.')
+                # Deterministic tools need neither model weights nor a training pause.
+                if recall_query(last_content) is not None:
+                    self.reply(answer_recall(last_content, memory.list_records()))
+                    return
+                tool_reply = answer_arithmetic(last_content)
+                if tool_reply is not None:
+                    self.reply({'reply': tool_reply, 'activity': [], 'tool': 'calculator'})
+                    return
                 if running:
                     raise ValueError('Pause training and wait for its weights to save before chatting.')
                 p = ROOT/'checkpoints/latest.pt'
@@ -165,41 +214,18 @@ class Handler(BaseHTTPRequestHandler):
                 saved = torch.load(p, map_location='cpu', weights_only=True)
                 if saved.get('stage') != 'finetune':
                     raise ValueError('Chat needs a fine-tuned checkpoint. Run the instruction fine-tuning stage first (see README).')
-                messages = body.get('messages', [])
-                if not isinstance(messages, list) or not messages:
-                    raise ValueError('Send at least one message.')
-                if len(messages) > 20:
-                    raise ValueError('Keep conversations to 20 messages or fewer per request; start a new chat.')
-                if messages[-1].get('role') != 'user':
-                    raise ValueError('The last message must be from the user.')
                 count = int(body.get('count', 160))
                 temp = float(body.get('temperature', 0.8))
                 if not 1 <= count <= 512 or not 0.1 <= temp <= 2:
                     raise ValueError('Invalid generation settings.')
-                parts = []
-                for m in messages[:-1]:
-                    content = str(m.get('content', ''))[:2000]
-                    if m.get('role') == 'user':
-                        parts.append(f'### Instruction:\n{content}\n\n')
-                    elif m.get('role') == 'assistant':
-                        parts.append(f'### Response:\n{content}\n<|end|>\n\n')
-                last_content = str(messages[-1].get('content', ''))[:2000]
-                tool_reply = answer_arithmetic(last_content)
-                if tool_reply is not None:
-                    # Arithmetic is a documented model-level weakness (see
-                    # WRITEUP.md, "Small models memorize arithmetic; they
-                    # don't compute it") -- answer with real computation
-                    # instead of the model's unreliable pattern-matched guess.
-                    self.reply({'reply': tool_reply, 'activity': [], 'step': saved['step'], 'tool': 'calculator'})
-                    return
-                prompt_text = ''.join(parts) + f'### Instruction:\n{last_content}\n\n### Response:\n'
                 model = Brain(Config(**saved['config']))
                 model.load_state_dict(saved['model'])
                 tok_path = ROOT/'checkpoints/tokenizer.json'
                 tokenizer = Tokenizer().load(tok_path) if tok_path.exists() else None
+                prompt_text, context_info = build_chat_prompt(messages, tokenizer, model.config.context, reserve=min(count, 32))
                 text, activity = model.generate(prompt_text, count, temp, tokenizer=tokenizer, stop_text='<|end|>')
                 reply = text[len(prompt_text):].strip() if text.startswith(prompt_text) else text.strip()
-                self.reply({'reply': reply, 'activity': activity, 'step': saved['step']})
+                self.reply({'reply': reply, 'activity': activity, 'step': saved['step'], 'context': context_info})
             elif self.path == '/api/preferences/pair':
                 p = ROOT/'checkpoints/latest.pt'
                 if running:
