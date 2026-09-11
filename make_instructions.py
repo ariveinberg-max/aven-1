@@ -457,6 +457,92 @@ def fallback_examples():
     return out
 
 
+# v11: Codex's independent capability-v1 eval scored 0% on comprehension,
+# instruction-following, and code-reading -- categories this project's training
+# data never covered at all (only arithmetic/facts/antonyms/small-talk existed).
+# This is the first attempt at that real gap, not more RLHF/data-quality polish.
+# Deliberately generates NEW instances of each skill (different names/values/code)
+# rather than anything resembling capability-v1.json's frozen questions -- training
+# on the actual eval questions would invalidate every future measurement against
+# that suite, exactly the mistake capability_errors.py's own docs warn against.
+COMP_NAMES = ['Priya', 'Jamal', 'Elena', 'Omar', 'Sofia', 'Liam', 'Ines', 'Kenji', 'Noor', 'Dana']
+COMP_OBJECTS = ['key', 'ball', 'pen', 'coin', 'ring', 'marble', 'watch', 'stamp']
+COMP_CONTAINERS = ['box', 'bag', 'drawer', 'jar', 'basket', 'crate']
+COMP_COLORS = ['red', 'blue', 'green', 'yellow', 'black', 'white', 'purple', 'orange']
+
+
+def comprehension_examples(n):
+    out = []
+    for _ in range(n):
+        name1, name2 = random.sample(COMP_NAMES, 2)
+        obj1, obj2 = random.sample(COMP_OBJECTS, 2)
+        color1, color2 = random.sample(COMP_COLORS, 2)
+        cont1, cont2 = random.sample(COMP_CONTAINERS, 2)
+        cont_color1, cont_color2 = random.sample(COMP_COLORS, 2)
+        story = (f'{name1} put a {color1} {obj1} in the {cont_color1} {cont1}. '
+                 f'{name2} put a {color2} {obj2} in the {cont_color2} {cont2}.')
+        if random.random() < 0.5:
+            q = f'{story} What color is the {cont1} that has the {color1} {obj1}? Answer one word.'
+            out.append((q, cont_color1))
+        else:
+            q = f'{story} Who put the {color2} {obj2} away? Answer one word.'
+            out.append((q, name2))
+    return out
+
+
+INSTR_WORDS = ['amber', 'quartz', 'meadow', 'velvet', 'harbor', 'lantern', 'thicket', 'copper',
+               'willow', 'granite', 'cinder', 'orchid']
+INSTR_PHRASES = ['the quiet river', 'a sudden storm', 'three old maps', 'the last candle']
+INSTRUCTION_FOLLOWING_TEMPLATES = [
+    ('Write only the word {w}.', '{w}'),
+    ('Reply with just the word {w}, nothing else.', '{w}'),
+    ('Answer with exactly one word: {w}.', '{w}'),
+    ('Say only "{w}".', '{w}'),
+]
+
+
+def instruction_following_examples(n):
+    out = []
+    for _ in range(n):
+        if random.random() < 0.7:
+            w = random.choice(INSTR_WORDS)
+            template, answer = random.choice(INSTRUCTION_FOLLOWING_TEMPLATES)
+            out.append((template.format(w=w), answer.format(w=w)))
+        else:
+            phrase = random.choice(INSTR_PHRASES)
+            out.append((f'Repeat exactly: {phrase}', phrase))
+    return out
+
+
+def code_reading_examples(n):
+    out = []
+    for _ in range(n):
+        kind = random.choice(['index', 'add', 'first_char', 'double', 'length'])
+        if kind == 'index':
+            vals = random.sample(range(1, 50), 3)
+            i = random.randint(0, 2)
+            code = f'x = [{vals[0]}, {vals[1]}, {vals[2]}]\nprint(x[{i}])'
+            answer = str(vals[i])
+        elif kind == 'add':
+            a, b = random.randint(1, 30), random.randint(1, 30)
+            code = f'x = {a}\ny = {b}\nprint(x + y)'
+            answer = str(a + b)
+        elif kind == 'first_char':
+            w = random.choice(WORDS)
+            code = f's = "{w}"\nprint(s[0])'
+            answer = w[0]
+        elif kind == 'double':
+            a = random.randint(1, 40)
+            code = f'x = {a}\nx = x * 2\nprint(x)'
+            answer = str(a * 2)
+        else:
+            vals = random.sample(range(1, 50), random.choice([2, 3, 4]))
+            code = f'lst = [{", ".join(map(str, vals))}]\nprint(len(lst))'
+            answer = str(len(vals))
+        out.append((f'Python:\n{code}\nWhat is printed? Output only the value.', answer))
+    return out
+
+
 def fact_examples():
     out = []
     for q, a in FACTS:
@@ -529,12 +615,16 @@ def all_single_turn_pools():
         'fallback': fallback_examples() * 6,
         'help_with_topic': fixed_replies(HELP_WITH_TOPIC_PROMPTS, FALLBACK_REPLIES, weight=4),
         'continuation': continuation_examples(1400),
+        'comprehension': comprehension_examples(1200),
+        'instruction_following': instruction_following_examples(800),
+        'code_reading': code_reading_examples(1200),
     }
     # Casual-phrasing duplicates: same correct response, informal wording (lowercase, no
     # punctuation, texting contractions) — the categories most likely to be typed casually.
     casual_sources = ['greeting', 'farewell', 'thanks', 'identity', 'help', 'wellbeing',
                        'arithmetic', 'antonym', 'calendar', 'list', 'comparison', 'fallback', 'fact',
-                       'open_ended', 'help_with_topic', 'book']
+                       'open_ended', 'help_with_topic', 'book', 'comprehension', 'instruction_following']
+    # code_reading deliberately excluded: casualize() would corrupt Python syntax.
     for name in casual_sources:
         pools[f'{name}_casual'] = add_casual(pools[name], rate=0.6)
     return pools
@@ -574,7 +664,10 @@ def render_multi(pairs):
     return '\n'.join(render_single(i, r) for i, r in pairs)
 
 
-def build(target_single=23000, target_multi=4000):
+def build(target_single=26000, target_multi=4000):
+    # v11: raised again (23000 -> 26000) after adding comprehension/
+    # instruction_following/code_reading -- same truncation-dilution mistake
+    # already found and fixed once this session if left at the old value.
     # v10: target_single was fixed at 13000 while the total single-turn pool grew to
     # ~19000-22000 across this session's additions, meaning the random shuffle-and-
     # truncate step was silently dropping ~30-40% of examples -- disproportionately
