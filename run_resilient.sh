@@ -172,7 +172,13 @@ while true; do
     log "Attempt $attempt (consecutive failures $failures/$MAX_RETRIES): python train.py ${args[*]}"
 
     export AVEN_BUDGET_ID="$budget_prefix-$chunk"
-    "$PYTHON" train.py "${args[@]}" 2>&1 | tee_append "$LOG_FILE"
+    # caffeinate prevents macOS from sleeping mid-run (no equivalent needed on
+    # Windows/Linux -- `have` gates this to only apply where it exists).
+    if have caffeinate; then
+        caffeinate -i "$PYTHON" train.py "${args[@]}" 2>&1 | tee_append "$LOG_FILE"
+    else
+        "$PYTHON" train.py "${args[@]}" 2>&1 | tee_append "$LOG_FILE"
+    fi
     code=${PIPESTATUS[0]}
     if [ "$stop_requested" = "1" ] || [ "$code" -eq 130 ] || [ "$code" -eq 143 ]; then
         log "Stop requested. Leaving the last saved checkpoint in place; no restart."

@@ -19,3 +19,4 @@ research/summaries/
 agents/summarizer*.log
 research/regression_checks/
 agents/regression_checker*.log
+agents/backup*.log
