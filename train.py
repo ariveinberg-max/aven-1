@@ -5,6 +5,7 @@ from dataclasses import asdict
 import hashlib
 import json
 import math
+import os
 import uuid
 import platform
 import numpy as np
@@ -15,8 +16,27 @@ import time
 import torch
 from brain import Brain, Config, device_name
 from tokenizer import Tokenizer
+from run_lock import WriterLock, WriterBusy
+from artifact_io import atomic_json, atomic_torch_save, file_sha256
+from response_mask import build_response_mask
+from rng_state import capture_rng, restore_rng
 
 ROOT = Path(__file__).resolve().parent
+
+
+def torch_device(name):
+    """Resolve a --device string to what .to() actually needs. 'dml' (DirectML,
+    for AMD/Intel GPUs on Windows -- no CUDA equivalent exists for them) isn't a
+    plain torch device string like 'cpu'/'cuda'/'mps': it needs torch_directml's
+    own device object. Lazily imported so machines without torch-directml
+    installed (e.g. this Mac) are unaffected by --device never being 'dml' here.
+    args.device itself stays the plain string everywhere else (metadata, logging,
+    checkpoint fields) -- only actual tensor .to() calls need this resolved form.
+    """
+    if name == 'dml':
+        import torch_directml
+        return torch_directml.device()
+    return name
 
 
 def append_ledger(record):
@@ -26,26 +46,27 @@ def append_ledger(record):
         f.write(json.dumps(record) + '\n')
 
 
-def atomic_json(path, obj):
-    tmp = path.with_suffix('.tmp')
-    tmp.write_text(json.dumps(obj), encoding='utf-8')
-    tmp.replace(path)
-
-
-def batch(data, size, context, device, generator=None):
+def batch(data, size, context, device, generator=None, target_mask=None):
     """data may be a torch tensor (tests, small in-memory corpora) or a numpy
     memmap (real training -- see the streaming pipeline in main()); as_tensor
     handles either uniformly without loading the whole backing store."""
-    starts = torch.randint(len(data)-context, (size,), generator=generator).tolist()
-    if torch.is_tensor(data):
-        x = torch.stack([data[i:i+context].to(torch.long) for i in starts])
-        y = torch.stack([data[i+1:i+context+1].to(torch.long) for i in starts])
-    else:
-        # np.array() copies -- trivial cost for one context-length window,
-        # but avoids writing through to the on-disk memmap cache.
-        x = torch.stack([torch.from_numpy(np.array(data[i:i+context])).long() for i in starts])
-        y = torch.stack([torch.from_numpy(np.array(data[i+1:i+context+1])).long() for i in starts])
-    return x.to(device), y.to(device)
+    for _ in range(50 if target_mask is not None else 1):
+        starts = torch.randint(len(data)-context, (size,), generator=generator).tolist()
+        if torch.is_tensor(data):
+            x = torch.stack([data[i:i+context].to(torch.long) for i in starts])
+            y = torch.stack([data[i+1:i+context+1].to(torch.long) for i in starts])
+        else:
+            # np.array() copies -- trivial cost for one context-length window,
+            # but avoids writing through to the on-disk memmap cache.
+            x = torch.stack([torch.from_numpy(np.array(data[i:i+context])).long() for i in starts])
+            y = torch.stack([torch.from_numpy(np.array(data[i+1:i+context+1])).long() for i in starts])
+        if target_mask is not None:
+            mask = torch.stack([torch.as_tensor(np.array(target_mask[i+1:i+context+1]), dtype=torch.bool) for i in starts])
+            y = y.masked_fill(~mask, -100)
+            if not mask.any():
+                continue
+        return x.to(device), y.to(device)
+    raise ValueError('Could not sample response targets; use denser instruction data or a larger context.')
 
 
 def stream_fingerprint_and_validate(path, chunk_size=8 * 1024 * 1024):
@@ -78,23 +99,41 @@ def encode_corpus_to_cache(data_path, tok, cache_path, chunk_size=ENCODE_CHUNK_B
     boundary are missed -- a small, accepted imprecision, same tradeoff most
     streaming tokenizers make; on a real corpus this affects a negligible
     fraction of tokens."""
-    tmp = cache_path.with_suffix('.tmp')
+    tmp = cache_path.with_name(cache_path.name + f'.{uuid.uuid4().hex}.tmp')
     token_count = 0
-    with data_path.open('rb') as f, open(tmp, 'wb') as out_f:
-        for chunk in iter(lambda: f.read(chunk_size), b''):
-            ids = tok.encode_ids(chunk)
-            np.asarray(ids, dtype=np.uint16).tofile(out_f)
-            token_count += len(ids)
-    tmp.replace(cache_path)
+    try:
+        with data_path.open('rb') as f, open(tmp, 'wb') as out_f:
+            for chunk in iter(lambda: f.read(chunk_size), b''):
+                ids = tok.encode_ids(chunk)
+                np.asarray(ids, dtype=np.uint16).tofile(out_f)
+                token_count += len(ids)
+        tmp.replace(cache_path)
+    finally:
+        tmp.unlink(missing_ok=True)
     return token_count
+
+
+def valid_token_cache(path, tokenizer_fingerprint):
+    """A name match alone cannot detect a truncated or corrupted cache."""
+    try:
+        metadata = json.loads(path.with_suffix('.json').read_text())
+        size = path.stat().st_size
+        return (size > 0 and size % 2 == 0 and metadata['bytes'] == size
+                and metadata['tokenizer_sha256'] == tokenizer_fingerprint
+                and metadata['sha256'] == file_sha256(path))
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', type=Path, default=ROOT/'data/demo.txt')
+    parser.add_argument('--init-from', type=Path, default=None, help='Initialize an isolated fine-tune from another checkpoint directory; requires --output-dir.')
+    parser.add_argument('--loss-mode', choices=['all', 'response'], default=None, help='Response-only instruction loss; default inherits checkpoint or all tokens.')
+    parser.add_argument('--output-dir', type=Path, default=None, help='Isolated checkpoint directory; defaults to checkpoints/.')
     parser.add_argument('--steps', type=int, default=200, help='Additional optimizer steps')
     parser.add_argument('--batch-size', type=int, default=8)
-    parser.add_argument('--device', choices=['cpu', 'mps', 'cuda'], default=device_name())
+    parser.add_argument('--device', choices=['cpu', 'mps', 'cuda', 'dml'], default=device_name())
     parser.add_argument('--resume', action='store_true')
     parser.add_argument('--expect-params', type=int, help='Require this parameter count when resuming or fine-tuning a checkpoint')
     for field in ('vocab', 'width', 'layers', 'heads', 'context'):
@@ -107,7 +146,7 @@ def main():
     parser.add_argument('--wandb-project', default='aven-1')
     parser.add_argument('--wandb-entity', default=None, help='Optional W&B account or team')
     parser.add_argument('--wandb-samples', action='store_true', help='Log generated text samples, which may reproduce training text')
-    parser.add_argument('--lr', type=float, default=3e-4, help='AdamW learning rate. Applies even on --resume/--finetune (overrides the saved optimizer state).')
+    parser.add_argument('--lr', type=float, default=None, help='Explicit AdamW learning-rate override. Otherwise inherit the checkpoint rate, or use 3e-4 for a new run.')
     parser.add_argument('--dropout', type=float, default=None,
                          help='Dropout. On a fresh run, defaults to 0. On --resume/--finetune, leaves the checkpoint\'s existing dropout untouched unless explicitly passed (safe to change any time — dropout adds no parameters).')
     parser.add_argument('--sweep', action='store_true',
@@ -116,6 +155,16 @@ def main():
     args = parser.parse_args()
     if not 1 <= args.steps <= 10000 or not 1 <= args.batch_size <= 32:
         parser.error('Steps must be 1–10000 and batch size 1–32.')
+    if args.lr is not None and (not math.isfinite(args.lr) or args.lr <= 0):
+        parser.error('Learning rate must be finite and positive.')
+    if args.init_from is not None:
+        if args.resume or args.output_dir is None or args.sweep:
+            parser.error('--init-from requires --output-dir and cannot be combined with --resume or --sweep.')
+        if args.init_from.resolve() == args.output_dir.resolve():
+            parser.error('--init-from and --output-dir must be different directories.')
+        args.finetune = True
+    if args.sweep and args.output_dir is not None:
+        parser.error('--sweep creates its own isolated output directory; omit --output-dir.')
     if args.dropout is not None and not 0 <= args.dropout < 1:
         parser.error('Dropout must be in [0, 1).')
     if args.sweep:
@@ -123,12 +172,24 @@ def main():
         args.finetune = False
         out = ROOT/'sweeps'/f'run-{time.strftime("%Y%m%d-%H%M%S")}-{__import__("os").getpid()}'
     else:
-        out = ROOT/'checkpoints'
+        out = args.output_dir.resolve() if args.output_dir else ROOT/'checkpoints'
+    try:
+        with WriterLock(out):
+            run_training(args, parser, out)
+    except WriterBusy as exc:
+        parser.error(str(exc))
+
+
+def run_training(args, parser, out):
     checkpoint = out/'latest.pt'
     tokenizer_path = out/'tokenizer.json'
+    load_checkpoint = args.init_from.resolve()/'latest.pt' if args.init_from else checkpoint
+    load_tokenizer = load_checkpoint.parent/'tokenizer.json'
+    if args.init_from and checkpoint.exists():
+        parser.error('--init-from requires an output directory without a checkpoint; use --resume for an existing child.')
     if checkpoint.exists() and not args.resume and not args.finetune:
         parser.error('A checkpoint exists. Use --resume, --finetune, or move checkpoints/ to preserve it before starting over.')
-    if (args.resume or args.finetune) and not checkpoint.exists():
+    if (args.resume or args.finetune) and not load_checkpoint.exists():
         parser.error('--resume/--finetune requires an existing checkpoint; none exists.')
     torch.set_num_threads(4)
     torch.manual_seed(42)
@@ -143,7 +204,7 @@ def main():
     parent_checkpoint_sha256 = None
     if args.resume or args.finetune:
         # Hash and load the same open file even if another process replaces its path.
-        with checkpoint.open('rb') as source:
+        with load_checkpoint.open('rb') as source:
             digest = hashlib.sha256()
             for chunk in iter(lambda: source.read(8 * 1024 * 1024), b''):
                 digest.update(chunk)
@@ -170,16 +231,21 @@ def main():
         parser.error('Vocab size must be 256–16384.')
     if args.heads <= 0 or args.width <= 0 or args.width % args.heads != 0:
         parser.error('Width and heads must be positive; width must be divisible by heads.')
+    if args.layers <= 0 or args.context <= 0:
+        parser.error('Layers and context must be positive.')
+    loss_mode = args.loss_mode or (saved.get('loss_mode', 'all') if saved else 'all')
+    if saved and not args.finetune and loss_mode != saved.get('loss_mode', 'all'):
+        parser.error('Changing loss mode requires --finetune, not --resume.')
     if saved and not args.finetune and saved['data_sha256'] != fingerprint:
         parser.error('The corpus changed. Preserve the old checkpoints/ folder and start a new run, or pass --finetune if this is deliberate.')
-    if args.finetune and saved['data_sha256'] == fingerprint and saved.get('stage') == 'finetune':
+    if args.finetune and not args.init_from and saved['data_sha256'] == fingerprint and saved.get('stage') == 'finetune' and loss_mode == saved.get('loss_mode', 'all'):
         args.finetune = False  # same corpus as last time: this is really just a --resume of the finetune run
     out.mkdir(parents=True, exist_ok=True)
     tok = Tokenizer()
     if saved:
-        if not tokenizer_path.exists():
+        if not load_tokenizer.exists():
             parser.error('No tokenizer.json next to this checkpoint; it predates BPE tokenization. Preserve checkpoints/ and start a new run.')
-        tok.load(tokenizer_path)
+        tok.load(load_tokenizer)
     elif args.tokenizer_path:
         tok.load(args.tokenizer_path)
     elif tokenizer_path.exists():
@@ -193,16 +259,28 @@ def main():
         tok.train(sample, args.vocab)
         tok.save(tokenizer_path)
         print(f'Tokenizer ready: {tok.vocab_size} tokens in {time.monotonic()-start_tok:.1f}s', flush=True)
+    tokenizer_fingerprint = tok.fingerprint()
+    if args.init_from and tokenizer_path.exists() and Tokenizer().load(tokenizer_path).fingerprint() != tokenizer_fingerprint:
+        parser.error('Output directory already contains a different tokenizer; choose a new --output-dir.')
+    if saved and tok.vocab_size != args.vocab:
+        parser.error('Tokenizer vocabulary does not match the checkpoint.')
+    if saved and saved.get('tokenizer_sha256', tokenizer_fingerprint) != tokenizer_fingerprint:
+        parser.error('Tokenizer merge rules changed since this checkpoint was saved.')
+    # Reused sweep tokenizers must also travel with their resulting checkpoint.
+    if not tokenizer_path.exists():
+        tok.save(tokenizer_path)
     cache_dir = ROOT/'data/.cache'
     cache_dir.mkdir(parents=True, exist_ok=True)
-    token_cache_path = cache_dir/f'{fingerprint[:16]}-{tok.vocab_size}.bin'
-    if token_cache_path.exists():
+    token_cache_path = cache_dir/f'v2-{fingerprint}-{tokenizer_fingerprint}-{ENCODE_CHUNK_BYTES}.bin'
+    if valid_token_cache(token_cache_path, tokenizer_fingerprint):
         token_count = token_cache_path.stat().st_size // 2  # uint16 = 2 bytes/token
         print(f'Reusing cached token encoding ({token_count:,} tokens).', flush=True)
     else:
         print('Encoding corpus to tokens…', flush=True)
         start_enc = time.monotonic()
         token_count = encode_corpus_to_cache(args.data, tok, token_cache_path)
+        atomic_json(token_cache_path.with_suffix('.json'), dict(tokenizer_sha256=tokenizer_fingerprint,
+                    bytes=token_count * 2, sha256=file_sha256(token_cache_path)))
         print(f'Encoded in {time.monotonic()-start_enc:.1f}s', flush=True)
     print(f'Corpus: {data_size:,} bytes -> {token_count:,} tokens ({data_size/max(token_count,1):.2f} bytes/token)', flush=True)
     if token_count < 512:
@@ -210,32 +288,50 @@ def main():
     data = np.memmap(token_cache_path, dtype=np.uint16, mode='r', shape=(token_count,))
     split = int(len(data)*0.9)
     training, validation = data[:split], data[split:]
+    training_mask = validation_mask = None
+    if loss_mode == 'response':
+        mask_path = out/'response-mask.bin'
+        try:
+            mask_info = build_response_mask(args.data, token_cache_path, tok, mask_path)
+        except ValueError as exc:
+            parser.error(str(exc))
+        masks = np.memmap(mask_path, dtype=np.uint8, mode='r', shape=(token_count,))
+        training_mask, validation_mask = masks[:split], masks[split:]
+        if not training_mask[1:].any() or not validation_mask[1:].any():
+            parser.error('Both training and validation splits need response targets.')
+        print(f"Response-only loss: {mask_info['response_tokens']:,}/{token_count:,} tokens supervised.", flush=True)
+    device_obj = torch_device(args.device)
     model = Brain(Config(**saved['config']) if saved else
                   Config(width=args.width, layers=args.layers, heads=args.heads, context=args.context,
-                         vocab=tok.vocab_size, dropout=args.dropout if args.dropout is not None else Config().dropout)).to(args.device)
+                         vocab=tok.vocab_size, dropout=args.dropout if args.dropout is not None else Config().dropout)).to(device_obj)
+    explicit_lr = args.lr
+    if args.lr is None:
+        args.lr = saved['optimizer']['param_groups'][0]['lr'] if saved else 3e-4
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
     step = 0
     history = []
-    stage = 'sweep' if args.sweep else 'pretrain'
+    rng_resume = 'new_phase'
+    stage = 'sweep' if args.sweep else 'finetune' if loss_mode == 'response' else 'pretrain'
     if saved:
         model.load_state_dict(saved['model'])
         optimizer.load_state_dict(saved['optimizer'])
-        for group in optimizer.param_groups:
-            group['lr'] = args.lr  # otherwise the reloaded state silently overrides --lr
+        if explicit_lr is not None:
+            for group in optimizer.param_groups:
+                group['lr'] = args.lr
         if args.dropout is not None and args.dropout != model.config.dropout:
             print(f'Overriding dropout {model.config.dropout} -> {args.dropout} (shape-compatible, safe on resume).', flush=True)
             model.config.dropout = args.dropout
             for module in model.modules():
                 if isinstance(module, torch.nn.Dropout):
                     module.p = args.dropout
-        entering_finetune = args.finetune and saved.get('stage', 'pretrain') != 'finetune'
+        entering_finetune = args.finetune
         if entering_finetune:
             print('Entering fine-tuning stage: weights carried over, step count and loss history reset for this new phase.', flush=True)
             stage = 'finetune'
         else:
             step = saved['step']
             history = saved['history']
-            torch.set_rng_state(saved['rng'])
+            rng_resume = restore_rng(saved, args.device)
             stage = saved.get('stage', 'pretrain')
     stop = False
     def request_stop(*_):
@@ -243,7 +339,16 @@ def main():
         stop = True
     signal.signal(signal.SIGTERM, request_stop)
     signal.signal(signal.SIGINT, request_stop)
-    start, target = time.monotonic(), step+args.steps
+    start = time.monotonic()
+    session_start_step = step
+    budget_id = os.environ.get('AVEN_BUDGET_ID')
+    target = step + args.steps
+    if budget_id and saved and not args.finetune and saved.get('budget_id') == budget_id:
+        if saved.get('budget_steps') != args.steps:
+            parser.error('Retry step budget changed within the same supervisor chunk.')
+        target = saved['budget_target']
+        if not isinstance(target, int) or target < step:
+            parser.error('Invalid saved retry target.')
     params = sum(p.numel() for p in model.parameters())
     run_id = f'{stage}-{fingerprint[:8]}-{uuid.uuid4().hex}'
     # Older checkpoints have only run_id. Siblings from the same legacy parent
@@ -253,7 +358,9 @@ def main():
                   if saved else run_id)
     provenance = dict(parent_checkpoint_sha256=parent_checkpoint_sha256,
                       lineage_id=lineage_id, platform=args.device,
-                      starting_step=saved['step'] if saved else 0)
+                      starting_step=saved['step'] if saved else 0,
+                      tokenizer_sha256=tokenizer_fingerprint, loss_mode=loss_mode,
+                      rng_resume=rng_resume, budget_id=budget_id, budget_target=target, budget_steps=args.steps)
     run_config = dict(stage=stage, dataset=args.data.name, parameters=params, lr=args.lr,
                        batch_size=args.batch_size, data_bytes=data_size, token_count=token_count,
                        bytes_per_token=round(data_size/max(token_count, 1), 3), **asdict(model.config))
@@ -280,7 +387,7 @@ def main():
     state = dict(status='training', step=step, target=target, parameters=params, device=args.device,
                  data_bytes=data_size, token_count=token_count, vocab=tok.vocab_size,
                  bytes_per_token=round(data_size/max(token_count, 1), 3), stage=stage, run_id=run_id,
-                 history=history, elapsed=0, dataset=args.data.name, **provenance)
+                 history=history, elapsed=0, dataset=args.data.name, writer_pid=os.getpid(), **provenance)
     def perplexity(loss):
         return round(math.exp(min(loss, 20)), 2)
     eval_metrics = {}
@@ -291,21 +398,19 @@ def main():
         rng = torch.Generator().manual_seed(123)
         with torch.no_grad():
             for _ in range(4):
-                x, y = batch(validation, args.batch_size, model.config.context, args.device, rng)
+                x, y = batch(validation, args.batch_size, model.config.context, device_obj, rng, target_mask=validation_mask)
                 logits, eval_loss, _ = model(x, y)
-                values.append(eval_loss.item())
+                values.append((eval_loss.item(), int((y != -100).sum().item())))
                 if wandb_run:
                     measurements.append(prediction_metrics(logits, y))
         if measurements:
-            eval_metrics.update({k: sum(m[k] for m in measurements)/len(measurements) for k in measurements[0]})
+            eval_metrics.update({k: sum(m[k] * count for m, (_, count) in zip(measurements, values)) / sum(count for _, count in values) for k in measurements[0]})
         model.train()
-        return sum(values)/len(values)
+        return sum(value * count for value, count in values) / sum(count for _, count in values)
     def save():
-        tmp = out/'latest.tmp'
-        torch.save(dict(config=asdict(model.config), model=model.state_dict(), optimizer=optimizer.state_dict(),
-                        step=step, history=history, data_sha256=fingerprint, rng=torch.get_rng_state(),
-                        stage=stage, dataset=args.data.name, run_id=run_id, **provenance), tmp)
-        tmp.replace(checkpoint)
+        atomic_torch_save(checkpoint, dict(config=asdict(model.config), model=model.state_dict(), optimizer=optimizer.state_dict(),
+                        step=step, history=history, data_sha256=fingerprint, rng=torch.get_rng_state(), rng_state=capture_rng(args.device),
+                        stage=stage, dataset=args.data.name, run_id=run_id, **provenance))
     if not history:
         v = evaluate()
         history.append(dict(step=0, train_loss=None, val_loss=v, val_perplexity=perplexity(v)))
@@ -321,13 +426,13 @@ def main():
     try:
         while step < target and not stop:
             model.train()
-            x, y = batch(training, args.batch_size, model.config.context, args.device)
+            x, y = batch(training, args.batch_size, model.config.context, device_obj, target_mask=training_mask)
             optimizer.zero_grad(set_to_none=True)
             logits, loss, _ = model(x, y)
             if not torch.isfinite(loss):
                 raise RuntimeError('Loss became nonfinite. Training stopped.')
             loss.backward()
-            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0, error_if_nonfinite=True)
             optimizer.step()
             step += 1
             last_loss = loss.item()
@@ -341,7 +446,7 @@ def main():
                 history.append(dict(step=step, train_loss=last_loss, val_loss=val, val_perplexity=perplexity(val)))
                 save()
                 elapsed = time.monotonic() - start
-                tokens_per_sec = (step - (target - args.steps)) * args.batch_size * model.config.context / max(elapsed, 1e-6)
+                tokens_per_sec = (step - session_start_step) * args.batch_size * model.config.context / max(elapsed, 1e-6)
                 weight_norm = sum(p.data.float().norm()**2 for p in model.parameters()).sqrt().item()
                 if wandb_run:
                     train_predictions = prediction_metrics(logits, y)
@@ -357,8 +462,8 @@ def main():
                                'throughput/train_interval_tokens_per_sec': len(interval_losses)*args.batch_size*model.config.context/training_seconds,
                                'timing/train_step_ms': 1000*training_seconds/len(interval_losses),
                                'timing/evaluation_seconds': eval_seconds, 'timing/session_seconds': elapsed,
-                               'progress/session_tokens': (step-(target-args.steps))*args.batch_size*model.config.context,
-                               'progress/session_equivalent_passes': (step-(target-args.steps))*args.batch_size*model.config.context/len(training),
+                               'progress/session_tokens': (step-session_start_step)*args.batch_size*model.config.context,
+                               'progress/session_equivalent_passes': (step-session_start_step)*args.batch_size*model.config.context/len(training),
                                'progress/target_step': target, 'optim/grad_norm': grad_norm.item(),
                                'optim/grad_norm_interval_mean': sum(interval_grads)/len(interval_grads),
                                'optim/clipped_step_fraction': sum(g>1 for g in interval_grads)/len(interval_grads),
