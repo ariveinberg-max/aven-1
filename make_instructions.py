@@ -369,10 +369,16 @@ def arithmetic_examples(n):
 
 
 def comparison_examples(n):
+    # v10: live testing found "which is bigger, 7 or 3?" answered with the WRONG
+    # template's shape ("No, 14 is not greater than 7.") and an unrelated number --
+    # the same combinatorial-sparsity problem already documented for arithmetic:
+    # 1-100 gives ~10,000 possible pairs for only 1000 examples. Narrowed to 1-20,
+    # matching arithmetic's honestly-trainable range, rather than adding more
+    # examples at a range this model has no realistic chance of covering.
     out = []
     phrasings = ['Is {a} greater than {b}?', 'Is {a} bigger than {b}?', 'Which is bigger, {a} or {b}?']
     for _ in range(n):
-        a, b = random.randint(1, 100), random.randint(1, 100)
+        a, b = random.randint(1, 20), random.randint(1, 20)
         if a == b:
             b += 1
         kind = random.choice(phrasings)
@@ -499,7 +505,7 @@ def all_single_turn_pools():
         'help': fixed_replies(HELP_PROMPTS, HELP_REPLIES, weight=3),
         'wellbeing': fixed_replies(WELLBEING_PROMPTS, WELLBEING_REPLIES, weight=3),
         'arithmetic': arithmetic_examples(2400),
-        'comparison': comparison_examples(1000),
+        'comparison': comparison_examples(1000) * 3,
         'word': word_task_examples(1600),
         'antonym': antonym_examples() * 7,
         'fact': fact_examples() * 5,
@@ -515,7 +521,10 @@ def all_single_turn_pools():
         # imbalance, not a context problem. Weighted up and added to casual_sources
         # below to match FACTS's treatment.
         'book': book_examples() * 5,
-        'calendar': calendar_examples() * 4,
+        # v10: live testing found "what day comes after Monday" answered with the
+        # right format but the wrong day -- calendar is a small, finite, easily
+        # memorizable set (7 days), the same shape as book, which weight alone fixed.
+        'calendar': calendar_examples() * 8,
         'list': list_examples(800),
         'fallback': fallback_examples() * 6,
         'help_with_topic': fixed_replies(HELP_WITH_TOPIC_PROMPTS, FALLBACK_REPLIES, weight=4),
@@ -565,7 +574,12 @@ def render_multi(pairs):
     return '\n'.join(render_single(i, r) for i, r in pairs)
 
 
-def build(target_single=13000, target_multi=4000):
+def build(target_single=23000, target_multi=4000):
+    # v10: target_single was fixed at 13000 while the total single-turn pool grew to
+    # ~19000-22000 across this session's additions, meaning the random shuffle-and-
+    # truncate step was silently dropping ~30-40% of examples -- disproportionately
+    # hurting small categories relative to giant ones like antonym/arithmetic. Raised
+    # above the full pool size so nothing gets dropped.
     pools = all_single_turn_pools()
     singles = [ex for pool in pools.values() for ex in pool]
     random.shuffle(singles)
