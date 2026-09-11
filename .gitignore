@@ -15,3 +15,5 @@ memory.db
 preferences.db
 wandb/
 sweeps/
+research/summaries/
+agents/summarizer*.log
