@@ -11,6 +11,10 @@ except ImportError:
 
 def prediction_metrics(logits, targets):
     with torch.no_grad():
+        valid = targets != -100
+        if not valid.any():
+            raise ValueError('Prediction metrics require at least one supervised target.')
+        logits, targets = logits[valid], targets[valid]
         logp = logits.detach().float().log_softmax(-1)
         return {
             'accuracy': (logits.argmax(-1) == targets).float().mean().item(),
