@@ -39,23 +39,18 @@ PREFERENCE_PROMPTS = [
     'Goodbye', 'Bye', "That's all, bye",
     'Thank you', 'Thanks a lot', 'I appreciate it',
 
-    # Added 2026-09-10: 'What makes a good friend?' (the exact prompt the note above
-    # called out as having zero trained variety) now genuinely does -- this session
-    # added an OPEN_ENDED category to make_instructions.py, 9 topics each with 3
-    # hand-written, genuinely different multi-sentence answers, specifically to fix
-    # the tie/incoherence problem this file's own history documents. Also added
-    # HELP_WITH_TOPIC_PROMPTS (paired with FALLBACK_REPLIES, 3 real variants each).
-    # Caveat, also documented this session in WRITEUP.md: which specific prompt
-    # shows real coherent variance vs. a tie vs. incoherent noise is NOT stable
-    # across training checkpoints -- a prompt that's great here today may not be
-    # next time this checkpoint changes. That's a reason to keep the pool large and
-    # diverse (so a few going stale doesn't matter much), not a reason to avoid
-    # adding more.
-    'What makes a good friend?', 'Is it better to be cautious or take risks?',
-    'Would you rather be invisible or be able to fly?', 'What is more important, money or happiness?',
-    'Is it better to work alone or with a team?', 'What is the best way to learn something new?',
-    'Do you think technology makes life better or worse?', 'What is more important, talent or hard work?',
-    'Should people always tell the truth, even if it hurts?',
+    # Added 2026-09-10 from the new OPEN_ENDED category, then re-tested live and
+    # trimmed hard: 7 of the original 9 OPEN_ENDED prompts were checked twice each
+    # against real /api/preferences/pair calls and showed a genuine defect at least
+    # once -- a stray "<|end" tag leaking into the visible text, mid-sentence
+    # truncation, garbled/repeated phrases, or a reply from a completely unrelated
+    # category (e.g. a HELP-style "Sure — what do you need help with?" answering a
+    # question about honesty). Per-prompt tie/coherence state is already documented
+    # as unstable across training checkpoints (see WRITEUP.md); it does NOT follow
+    # that broken-both-times-in-a-row is just noise -- only the 2 prompts below
+    # passed clean on every check and are kept. HELP_WITH_TOPIC_PROMPTS all tested
+    # clean and on-topic every time.
+    'Would you rather be invisible or be able to fly?', 'What is the best way to learn something new?',
     'Can you help me with a math problem?', 'Can you help me with my homework?',
     'Can you help me with something complicated?', 'Can you help me write an essay?',
     'Can you help me fix my code?', 'Can you help me plan a trip?',
