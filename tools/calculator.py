@@ -1,19 +1,5 @@
-"""Standalone arithmetic tool-use prototype for Aven-1.
-
-Problem this addresses (see WRITEUP.md, "Small models memorize arithmetic;
-they don't compute it"): the fine-tuned 58M model pattern-matches arithmetic
-questions against memorized training examples instead of actually computing
-the answer. Tested live, it answered "whats 1+1" with "1 plus 1 is 12." --
-wrong. This module is a tool-use fallback: detect an arithmetic question in
-the raw user message, compute the real answer with Python arithmetic, and
-format it in the same style the model was trained to produce (see
-make_instructions.py's ARITH_*_PHRASES and arithmetic_examples()), so the
-correct answer is indistinguishable in style from the model's own voice.
-
-This is a standalone proof-of-concept only. It is NOT wired into server.py
-or chat.html.
-"""
-
+"""Local chat calculator with bounded, exact arithmetic and complete-request parsing."""
+import ast
 import re
 from fractions import Fraction
 
@@ -67,54 +53,75 @@ def _format_number(n):
         if n.denominator == 1:
             return str(n.numerator)
         # Fall back to a decimal rendering for non-integer results.
-        return str(round(float(n), 6)).rstrip('0').rstrip('.')
+        return f'{n.numerator}/{n.denominator}'
     return str(n)
 
 
-def detect_arithmetic(message):
-    """Detect an arithmetic request and extract (a, op, b) as (Fraction, str, Fraction).
-
-    Returns None if the message does not look like a basic arithmetic
-    computation (addition, subtraction, multiplication, division).
-    """
-    if not message or not isinstance(message, str):
+def expression_from_message(message):
+    """Accept a complete calculation request, never a substring of prose."""
+    if not isinstance(message, str) or len(message) > 512:
         return None
+    text = message.strip().lower().rstrip('?.!').strip()
+    text = re.sub(r"^(?:please\s+)?(?:what is|what's|whats|calculate|compute|evaluate)\s+", '', text)
+    for pattern, op, reverse in ((_SUB_FROM_PATTERN, '-', True),
+                                  (_ADD_AND_PATTERN, '+', False),
+                                  (_MUL_AND_PATTERN, '*', False)):
+        match = pattern.fullmatch(text)
+        if match:
+            a, b = match.groups()
+            return f'{b} - {a}' if reverse else f'{a} {op} {b}'
+    for word, op in _OP_WORDS.items():
+        text = re.sub(r'\b' + word + r'\b', op, text)
+    text = text.replace('×', '*').replace('÷', '/').replace('−', '-')
+    text = re.sub(r'(?<=\d)\s*x\s*(?=[-+\d(])', '*', text)
+    if not re.fullmatch(r'[0-9.\s()+*/-]+', text) or not any(c in text for c in '+-*/'):
+        return None
+    return text
 
-    text = message.strip()
 
-    # "Subtract B from A" -> A - B (word order is reversed vs. surface order).
-    m = _SUB_FROM_PATTERN.search(text)
-    if m:
-        b, a = m.group(1), m.group(2)
-        return (_to_number(a), '-', _to_number(b))
+def _parse(expression):
+    tree = ast.parse(expression, mode='eval').body
+    if sum(1 for _ in ast.walk(tree)) > 100:
+        raise ValueError('Expression too complex')
+    return tree
 
-    # "Add A and B"
-    m = _ADD_AND_PATTERN.search(text)
-    if m:
-        return (_to_number(m.group(1)), '+', _to_number(m.group(2)))
 
-    # "Multiply A and B"
-    m = _MUL_AND_PATTERN.search(text)
-    if m:
-        return (_to_number(m.group(1)), '*', _to_number(m.group(2)))
+def _evaluate(node, expression):
+    if isinstance(node, ast.Constant) and type(node.value) in (int, float):
+        result = Fraction(ast.get_source_segment(expression, node))
+    elif isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+        result = _evaluate(node.operand, expression)
+        if isinstance(node.op, ast.USub):
+            result = -result
+    elif isinstance(node, ast.BinOp) and type(node.op) in (ast.Add, ast.Sub, ast.Mult, ast.Div):
+        a, b = _evaluate(node.left, expression), _evaluate(node.right, expression)
+        op = {ast.Add: '+', ast.Sub: '-', ast.Mult: '*', ast.Div: '/'}[type(node.op)]
+        result = compute(a, op, b)
+        if result is None:
+            raise ZeroDivisionError
+    else:
+        raise ValueError('Unsupported expression')
+    if max(result.numerator.bit_length(), result.denominator.bit_length()) > 4096:
+        raise ValueError('Result too large')
+    return result
 
-    # "A plus/minus/times/divided by B" (formal word phrasing)
-    m = _WORD_OP_PATTERN.search(text)
-    if m:
-        a, op_word, b = m.group(1), m.group(2).lower(), m.group(3)
-        return (_to_number(a), _OP_WORDS[op_word], _to_number(b))
 
-    # Compact symbol notation: "1+1", "6*7", "10/2", etc. Checked last so
-    # word-based phrasing (which may itself contain no symbols) is preferred
-    # when both could match, and so a plain word like "opposite" never
-    # accidentally matches a symbol pattern (it can't, but scanning order
-    # keeps intent clear).
-    for pattern, op in _COMPACT_PATTERNS:
-        m = pattern.search(text)
-        if m:
-            return (_to_number(m.group(1)), op, _to_number(m.group(2)))
-
-    return None
+def detect_arithmetic(message):
+    """Compatibility API for complete two-operand calculations."""
+    expression = expression_from_message(message)
+    if expression is None:
+        return None
+    try:
+        node = _parse(expression)
+        if not isinstance(node, ast.BinOp) or type(node.op) not in (ast.Add, ast.Sub, ast.Mult, ast.Div):
+            return None
+        if isinstance(node.left, ast.BinOp) or isinstance(node.right, ast.BinOp):
+            return None
+        return (_evaluate(node.left, expression),
+                {ast.Add: '+', ast.Sub: '-', ast.Mult: '*', ast.Div: '/'}[type(node.op)],
+                _evaluate(node.right, expression))
+    except (SyntaxError, ValueError, ZeroDivisionError):
+        return None
 
 
 def compute(a, op, b):
@@ -144,21 +151,21 @@ def format_answer(a, op, b, result):
 
 
 def answer_arithmetic(message):
-    """Main entry point: given a raw user message, return the correct
-    arithmetic answer string if the message is an arithmetic request,
-    else None.
+    """Compute bounded arithmetic with precedence and exact decimal inputs.
+
+    No eval, calls, names, powers, or partial matches. Unsupported requests
+    return None so chat can continue through the language model.
     """
-    parsed = detect_arithmetic(message)
-    if parsed is None:
+    expression = expression_from_message(message)
+    if expression is None:
         return None
-    a, op, b = parsed
-    result = compute(a, op, b)
-    return format_answer(a, op, b, result)
-
-
-if __name__ == '__main__':
-    # Quick manual demo of the exact failing case from tonight's testing.
-    failing_case = "whats 1+1"
-    print(f"Input: {failing_case!r}")
-    print(f"Model said (tonight, wrong): '1 plus 1 is 12.'")
-    print(f"Tool says (correct):         '{answer_arithmetic(failing_case)}'")
+    try:
+        result = _evaluate(_parse(expression), expression)
+    except ZeroDivisionError:
+        return f'{expression} is undefined (division by zero).'
+    except (SyntaxError, ValueError, OverflowError, RecursionError):
+        return None
+    parsed = detect_arithmetic(message)
+    if parsed is not None:
+        return format_answer(*parsed, result)
+    return f'{expression} = {_format_number(result)}.'

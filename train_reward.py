@@ -8,12 +8,16 @@ tab to improve it.
 """
 import argparse
 import random
+import math
 from pathlib import Path
 import torch
 from brain import Config
 from tokenizer import Tokenizer
 from reward_model import RewardModel
 import preferences
+from preference_data import split_comparisons
+from artifact_io import atomic_torch_save, file_sha256
+from run_lock import WriterLock, WriterBusy
 
 ROOT = Path(__file__).resolve().parent
 
@@ -21,7 +25,8 @@ ROOT = Path(__file__).resolve().parent
 def encode_pair(tokenizer, prompt, response, context):
     text = f'### Instruction:\n{prompt}\n\n### Response:\n{response}'
     ids = tokenizer.encode(text)
-    ids = ids[-context:] if len(ids) > context else ids
+    if len(ids) > context:
+        raise ValueError('Preference comparison exceeds checkpoint context; shorten it before labeling.')
     if len(ids) < 2:
         ids = ids + [10]
     return torch.tensor([ids], dtype=torch.long)
@@ -33,10 +38,20 @@ def main():
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--val-fraction', type=float, default=0.2)
     args = parser.parse_args()
+    if args.steps < 1 or not math.isfinite(args.lr) or args.lr <= 0 or not 0 < args.val_fraction < 1:
+        parser.error('Use positive steps/learning rate and a validation fraction between zero and one.')
+    try:
+        with WriterLock(ROOT/'checkpoints'):
+            train_reward(args)
+    except WriterBusy as exc:
+        parser.error(str(exc))
 
+
+def train_reward(args):
     checkpoint_path = ROOT/'checkpoints/latest.pt'
     if not checkpoint_path.exists():
         raise SystemExit('No fine-tuned checkpoint found. Train and fine-tune Aven-1 first.')
+    parent_sha256 = file_sha256(checkpoint_path)
     saved = torch.load(checkpoint_path, map_location='cpu', weights_only=True)
     if saved.get('stage') != 'finetune':
         raise SystemExit('Reward model needs a fine-tuned checkpoint, not just pretraining.')
@@ -44,16 +59,29 @@ def main():
 
     tokenizer = Tokenizer().load(ROOT/'checkpoints/tokenizer.json')
 
+    if tokenizer.vocab_size != config.vocab or saved.get('tokenizer_sha256', tokenizer.fingerprint()) != tokenizer.fingerprint():
+        raise ValueError('Tokenizer does not match the policy checkpoint.')
     data = preferences.all_decided()
-    if len(data) < 4:
-        raise SystemExit(f'Only {len(data)} decided (non-tie) comparisons available. '
-                          'Label more in the Preferences tab (aim for at least ~20-30) before training.')
-    random.seed(7)
-    random.shuffle(data)
-    n_val = max(1, int(len(data) * args.val_fraction))
-    val_data, train_data = data[:n_val], data[n_val:]
-    print(f'{len(train_data)} train comparisons, {len(val_data)} held out '
-          f'(total {len(data)} decided; {preferences.count() - len(data)} ties excluded)', flush=True)
+    usable = []
+    skipped_context = 0
+    encoded = {}
+    for row in data:
+        try:
+            a = encode_pair(tokenizer, row['prompt'], row['response_a'], config.context)
+            b = encode_pair(tokenizer, row['prompt'], row['response_b'], config.context)
+        except ValueError:
+            skipped_context += 1
+            continue
+        usable.append(row)
+        encoded[(row['prompt'], row['response_a'], row['response_b'])] = (a, b)
+    train_data, val_data, data_report = split_comparisons(usable, args.val_fraction, seed=7)
+    data_report['skipped_context'] = skipped_context
+    rng = random.Random(7)
+    torch.manual_seed(7)
+    torch.set_num_threads(2)
+    print(f'{len(train_data)} train comparisons, {len(val_data)} held out; '
+          f"{data_report['train_prompt_count']} train prompts, {data_report['val_prompt_count']} validation prompts.", flush=True)
+    print(f'Preference preparation: {data_report}', flush=True)
 
     model = RewardModel(config)
     copied = model.load_backbone(saved['model'])
@@ -62,12 +90,8 @@ def main():
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
 
     def pair_tensors(row):
-        if row['winner'] == 'a':
-            chosen, rejected = row['response_a'], row['response_b']
-        else:
-            chosen, rejected = row['response_b'], row['response_a']
-        return (encode_pair(tokenizer, row['prompt'], chosen, config.context),
-                encode_pair(tokenizer, row['prompt'], rejected, config.context))
+        a, b = encoded[(row['prompt'], row['response_a'], row['response_b'])]
+        return (a, b) if row['winner'] == 'a' else (b, a)
 
     def evaluate(rows):
         model.eval()
@@ -83,21 +107,24 @@ def main():
     print(f'Initial held-out accuracy: {evaluate(val_data):.2%} (random guessing is 50%)', flush=True)
     model.train()
     for step in range(1, args.steps + 1):
-        row = random.choice(train_data)
+        row = rng.choice(train_data)
         chosen_ids, rejected_ids = pair_tensors(row)
         r_chosen, r_rejected = model(chosen_ids), model(rejected_ids)
         loss = -torch.nn.functional.logsigmoid(r_chosen - r_rejected).mean()
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0, error_if_nonfinite=True)
         optimizer.step()
         if step % 50 == 0 or step == args.steps:
             acc = evaluate(val_data)
             print(f'Step {step} | loss {loss.item():.3f} | held-out accuracy {acc:.2%}', flush=True)
 
     out = ROOT/'checkpoints/reward.pt'
-    torch.save(dict(config=saved['config'], model=model.state_dict(),
-                     train_count=len(train_data), val_count=len(val_data)), out)
+    atomic_torch_save(out, dict(config=saved['config'], model=model.state_dict(),
+                     train_count=len(train_data), val_count=len(val_data),
+                     heldout_accuracy=evaluate(val_data), data_report=data_report,
+                     parent_checkpoint_sha256=parent_sha256, tokenizer_sha256=tokenizer.fingerprint(),
+                     seed=7, steps=args.steps, lr=args.lr))
     print(f'Saved reward model to {out}', flush=True)
 
 
