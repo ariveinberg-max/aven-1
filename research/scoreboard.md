@@ -9,12 +9,14 @@ per model each time a real eval sweep is run — don't overwrite history.
 |---|---|---|---|---|---|---|
 | 2026-09-11 | 5499 | finetune | 0/30 (0% all 5 categories) | — | 500 | Day 1 baseline, pre-RAFT |
 | 2026-09-12 | 5499 (RAFT-promoted) | finetune | 0/30 (0% all 5 categories, 0 regressions vs. pre-RAFT) | 112 usable, 75% held-out | 670 | RAFT promoted (see entry2-2026-09-12.md). Checkpoint sha256 84d6a8f2... |
+| 2026-09-12 | 5499 (unchanged) | finetune | — (unchanged since above) | — | 750 | Labeling session only, no new training. |
 
-## Aven-2 (153.45M, Windows PC)
+## Aven-2 (Windows PC — parameter count discrepancy noted below)
 
 | Date | Step | Stage | Held-out perplexity | Capability suite | Notes |
 |---|---|---|---|---|---|
-| 2026-09-12 | 11260 | pretrain | ~37.9 | 0/30 (0% all 5 categories) | First capability-suite run on Aven-2 this session. 0% is expected and honest — pretrain-only, no instruction fine-tuning, never seen the ### Instruction: format at all. Not comparable to Aven-1's 0% (different cause). |
+| 2026-09-12 | 11260 | pretrain | ~37.9 | 0/30 (0% all 5 categories) | First capability-suite run on Aven-2 this session. 0% is expected and honest — pretrain-only, no instruction fine-tuning, never seen the ### Instruction: format at all. Not comparable to Aven-1's 0% (different cause). Reported as 153,450,496 parameters. |
+| 2026-09-12 | 11260→11280+ | pretrain | 37.25 and declining | — | Training crash-loop: hit run_resilient.sh's full 20-retry limit and stopped entirely at 08:45:48Z (a real torch-version incompatibility, not a transient blip — see research/TASKS.md). Fixed and manually restarted; resumed cleanly. This run's startup log reported **155,547,648 parameters** for the identical --width 1024 --layers 12 --heads 16 --context 192 architecture — a ~2.1M discrepancy against the eval run's 153,450,496 above, not yet explained. Flagging honestly rather than silently picking one number; needs investigation before trusting either figure precisely. |
 
 ## Reading this scoreboard honestly
 
