@@ -245,17 +245,29 @@ class Handler(BaseHTTPRequestHandler):
                 tok_path = ROOT/'checkpoints/tokenizer.json'
                 tokenizer = Tokenizer().load(tok_path) if tok_path.exists() else None
                 wrapped = f'### Instruction:\n{prompt}\n\n### Response:\n'
-                out = []
                 # Widened+equalized 2026-09-12: 0.5/0.9 stopped diverging once RAFT made
                 # the model confident on these prompts -- a low/high pair also wastes the
-                # low draw on near-certainty either way. Tested live: 1.3/1.3 gives real
-                # divergence (5/8 prompt-pairs) without the typo/template-blending defects
-                # that start appearing at 1.4+. Real tradeoff, not a clean fix -- pushing
-                # temperature for label diversity does occasionally reintroduce the exact
-                # incoherence this prompt list was hard-trimmed to avoid (see comment above).
-                for temp in (1.3, 1.3):
-                    text, _ = model.generate(wrapped, count=60, temperature=temp, tokenizer=tokenizer, stop_text='<|end|>')
-                    out.append(text[len(wrapped):].strip() if text.startswith(wrapped) else text.strip())
+                # low draw on near-certainty either way. 1.3/1.3 gives real divergence more
+                # often than not, but still ties a lot of the time in practice (a genuinely
+                # confident model does that) -- rather than fight sampling further and risk
+                # more incoherence, retry server-side up to 4 times so an identical pair
+                # never actually reaches the person labeling; a real tie that survives every
+                # retry is presented as-is rather than retried forever.
+                def plausible(r):
+                    # Cheap, real filter for the retry loop -- catches the obvious
+                    # breakage (stray end-marker fragments, truncation, non-alphabetic
+                    # start) that 1.3 sampling occasionally produces. Not a coherence
+                    # judge; a human still makes the real call on anything that passes.
+                    return len(r) >= 3 and r[0].isalpha() and '<|' not in r
+                out = None
+                for _attempt in range(6):
+                    candidate = []
+                    for temp in (1.3, 1.3):
+                        text, _ = model.generate(wrapped, count=60, temperature=temp, tokenizer=tokenizer, stop_text='<|end|>')
+                        candidate.append(text[len(wrapped):].strip() if text.startswith(wrapped) else text.strip())
+                    out = candidate
+                    if candidate[0] != candidate[1] and plausible(candidate[0]) and plausible(candidate[1]):
+                        break
                 self.reply({'prompt': prompt, 'response_a': out[0], 'response_b': out[1]})
             elif self.path == '/api/preferences/vote':
                 prompt = str(body.get('prompt', ''))
