@@ -17,5 +17,9 @@ if [ -f "$ROOT/checkpoints/latest.pt" ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Backed up checkpoints/latest.pt"
 fi
 if [ -f "$ROOT/checkpoints/tokenizer.json" ]; then
-    cp "$ROOT/checkpoints/tokenizer.json" "$DEST/tokenizer.json"
+    # Atomic tmp+mv, same as latest.pt above -- a direct cp onto the live,
+    # iCloud-synced file races with the file-provider daemon's own lock on
+    # it ("Resource deadlock avoided", seen recurring in production).
+    # Renaming a new temp file into place never needs that lock.
+    cp "$ROOT/checkpoints/tokenizer.json" "$DEST/tokenizer.json.tmp" && mv "$DEST/tokenizer.json.tmp" "$DEST/tokenizer.json"
 fi
