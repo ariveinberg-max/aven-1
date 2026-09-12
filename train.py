@@ -17,7 +17,7 @@ import torch
 from brain import Brain, Config, device_name
 from tokenizer import Tokenizer
 from run_lock import WriterLock, WriterBusy
-from artifact_io import atomic_json, atomic_torch_save, file_sha256
+from artifact_io import allow_safe_rng_globals, atomic_json, atomic_torch_save, file_sha256
 from response_mask import build_response_mask
 from rng_state import capture_rng, restore_rng
 
@@ -210,6 +210,7 @@ def run_training(args, parser, out):
                 digest.update(chunk)
             parent_checkpoint_sha256 = digest.hexdigest()
             source.seek(0)
+            allow_safe_rng_globals()
             saved = torch.load(source, map_location='cpu', weights_only=True)
     if saved:
         # Brain ties output.weight to token.weight; count that parameter only once.
