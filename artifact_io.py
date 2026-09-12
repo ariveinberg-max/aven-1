@@ -56,6 +56,22 @@ def validate_tokenizer(checkpoint, tokenizer, label='Checkpoint'):
 def load_checkpoint_snapshot(path, expected_sha256=None):
     """Hash and load the same open file despite atomic path replacement."""
     import torch
+    # Some checkpoints store CPU RNG state as a numpy array (see train.py's
+    # random-state save/resume). Newer torch versions' weights_only=True
+    # loader rejects numpy's own array-reconstruction function unless it's
+    # explicitly allowlisted -- seen failing on the Windows PC's torch build
+    # even though the identical checkpoint format loads fine elsewhere.
+    # This is PyTorch's own documented remediation for exactly this case:
+    # allowlisting one specific, understood function, not disabling the
+    # safety check itself.
+    try:
+        import numpy
+        torch.serialization.add_safe_globals([
+            numpy._core.multiarray._reconstruct, numpy.ndarray, numpy.dtype,
+            numpy.dtypes.Float64DType, numpy.dtypes.Float32DType, numpy.dtypes.Int64DType,
+        ])
+    except Exception:
+        pass  # older torch/numpy without this API, or numpy unavailable -- harmless to skip
     with Path(path).open('rb') as source:
         digest = hashlib.sha256()
         for block in iter(lambda: source.read(1024 * 1024), b''):
