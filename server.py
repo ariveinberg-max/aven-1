@@ -34,10 +34,19 @@ PREFERENCE_PROMPTS = [
     # genuinely multiple canned replies (GREETING_REPLIES: 5, IDENTITY_REPLIES: 3,
     # FAREWELL_REPLIES: 4, THANKS_REPLIES: 4) -- WELLBEING/HELP (only 2-3 replies
     # each) and any prompt outside these six categories collapse too easily.
-    'Hello!', 'Hi there', 'Good morning', "What's up?", 'Greetings',
-    'Who are you?', 'What are you?', 'Tell me about yourself', 'Are you ChatGPT?',
-    'Goodbye', 'Bye', "That's all, bye",
-    'Thank you', 'Thanks a lot', 'I appreciate it',
+    #
+    # Revised 2026-09-12: this session's RAFT round trained strong, confident
+    # single answers into exactly the prompts overlapping RAFT_PROMPTS (raft.py),
+    # collapsing 29/35 live pair-generation calls to byte-identical A/B -- nothing
+    # left to label. Swapped those 6 collapsed prompts for untested phrasings from
+    # the SAME safe categories (never touched by RAFT_PROMPTS) rather than adding
+    # new categories, which is exactly what caused the garbled-output regressions
+    # documented above. If a future RAFT/PPO/DPO round trains on these too, expect
+    # to swap again -- this list needs to stay ahead of whatever was just trained.
+    'Hi', 'Hi there', 'Good evening', "What's up?", 'Greetings',
+    'What is your name?', 'What are you?', 'Do you have a name?', 'Are you ChatGPT?',
+    'I have to go now', 'Bye', "That's all, bye",
+    'Much appreciated', 'Thanks a lot', 'I appreciate it',
 
     # Added 2026-09-10 from the new OPEN_ENDED category, then re-tested live and
     # trimmed hard: 7 of the original 9 OPEN_ENDED prompts were checked twice each
@@ -237,7 +246,14 @@ class Handler(BaseHTTPRequestHandler):
                 tokenizer = Tokenizer().load(tok_path) if tok_path.exists() else None
                 wrapped = f'### Instruction:\n{prompt}\n\n### Response:\n'
                 out = []
-                for temp in (0.5, 0.9):
+                # Widened+equalized 2026-09-12: 0.5/0.9 stopped diverging once RAFT made
+                # the model confident on these prompts -- a low/high pair also wastes the
+                # low draw on near-certainty either way. Tested live: 1.3/1.3 gives real
+                # divergence (5/8 prompt-pairs) without the typo/template-blending defects
+                # that start appearing at 1.4+. Real tradeoff, not a clean fix -- pushing
+                # temperature for label diversity does occasionally reintroduce the exact
+                # incoherence this prompt list was hard-trimmed to avoid (see comment above).
+                for temp in (1.3, 1.3):
                     text, _ = model.generate(wrapped, count=60, temperature=temp, tokenizer=tokenizer, stop_text='<|end|>')
                     out.append(text[len(wrapped):].strip() if text.startswith(wrapped) else text.strip())
                 self.reply({'prompt': prompt, 'response_a': out[0], 'response_b': out[1]})
