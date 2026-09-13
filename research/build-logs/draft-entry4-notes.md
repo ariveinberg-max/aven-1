@@ -40,3 +40,6 @@ Found and fixed a separate, real gap along the way: none of `dpo.py`/`kto.py`/`p
 
 ## One number for the headline
 Four real RLHF methods now exist side by side on this project (reward-model+RAFT, DPO, KTO, PPO), each tested against the same real, growing dataset, each with honest results reported rather than the best one cherry-picked. Three of the four produced live-verified-clean or nearly-clean results; PPO produced a real regression twice, at two different data scales — and the literature explains exactly why, rather than leaving it as an unexplained flake.
+
+## Dataset, still growing
+The comparison pool has kept growing through continued labeling sessions since the numbers above: 910 total (870 human, 40 AI-labeled) as of this note. Worth a real re-run of the reward-model/RAFT/DPO/KTO comparison once this settles at a meaningfully larger number — the trend so far (accuracy bouncing, not climbing, with more data) has been the actual story, not a temporary phase to grow out of.
