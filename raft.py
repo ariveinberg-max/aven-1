@@ -90,15 +90,32 @@ def main():
     validate_tokenizer(saved, tokenizer, 'Policy checkpoint')
     validate_tokenizer(reward_saved, tokenizer, 'Reward checkpoint')
 
+    def plausible(r):
+        # Same cheap real-breakage filter as server.py's pair-generation endpoint --
+        # not a coherence judge, just catches stray end-markers/truncation/non-alphabetic
+        # starts that 1.3 sampling occasionally produces.
+        return len(r) >= 3 and r[0].isalpha() and '<|' not in r
+
     blocks = []
     reward_gaps = []
     for prompt in RAFT_PROMPTS:
         wrapped = f'### Instruction:\n{prompt}\n\n### Response:\n'
         candidates = []
-        for i in range(args.candidates):
-            temp = 0.5 + 0.4 * (i / max(args.candidates - 1, 1))  # spread from 0.5 to 0.9
-            text, _ = policy.generate(wrapped, count=60, temperature=temp, tokenizer=tokenizer, stop_text='<|end|>')
-            response = text[len(wrapped):].strip() if text.startswith(wrapped) else text.strip()
+        # 2026-09-13: replaced the old 0.5-0.9 spread schedule -- it stopped diverging
+        # once the model got confident on these prompts (same root cause server.py's
+        # pair-generation endpoint hit and fixed on 2026-09-12; raft.py has its own
+        # separate generation loop and never got the fix). Uniform 1.3 plus a per-candidate
+        # retry against what's already been generated actually forces real spread instead
+        # of relying on a temperature gradient the model can just ignore.
+        for _i in range(args.candidates):
+            response = None
+            for _attempt in range(6):
+                text, _ = policy.generate(wrapped, count=60, temperature=1.3, tokenizer=tokenizer, stop_text='<|end|>')
+                candidate_text = text[len(wrapped):].strip() if text.startswith(wrapped) else text.strip()
+                if plausible(candidate_text) and candidate_text not in candidates:
+                    response = candidate_text
+                    break
+                response = candidate_text  # last attempt's output, used even if a duplicate/implausible one persists
             if response:
                 candidates.append(response)
         if not candidates:
