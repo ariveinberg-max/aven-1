@@ -7,6 +7,7 @@ import sys
 import threading
 import webbrowser
 import torch
+from artifact_io import allow_safe_rng_globals
 from brain import Brain, Config, device_name
 from tokenizer import Tokenizer
 import memory
@@ -181,6 +182,7 @@ class Handler(BaseHTTPRequestHandler):
                 temp = float(body.get('temperature', 0.8))
                 if not 1 <= count <= 512 or not 0.1 <= temp <= 2:
                     raise ValueError('Invalid generation settings.')
+                allow_safe_rng_globals()
                 saved = torch.load(p, map_location='cpu', weights_only=True)
                 model = Brain(Config(**saved['config']))
                 model.load_state_dict(saved['model'])
@@ -215,6 +217,7 @@ class Handler(BaseHTTPRequestHandler):
                 p = ROOT/'checkpoints/latest.pt'
                 if not p.exists():
                     raise ValueError('Train your brain first to create its first checkpoint.')
+                allow_safe_rng_globals()
                 saved = torch.load(p, map_location='cpu', weights_only=True)
                 if saved.get('stage') != 'finetune':
                     raise ValueError('Chat needs a fine-tuned checkpoint. Run the instruction fine-tuning stage first (see README).')
@@ -236,6 +239,7 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError('Pause training and wait for its weights to save before generating comparisons.')
                 if not p.exists():
                     raise ValueError('Train your brain first to create its first checkpoint.')
+                allow_safe_rng_globals()
                 saved = torch.load(p, map_location='cpu', weights_only=True)
                 if saved.get('stage') != 'finetune':
                     raise ValueError('Preference collection needs a fine-tuned checkpoint.')

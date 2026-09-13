@@ -11,7 +11,7 @@ from pathlib import Path
 import shutil
 import tempfile
 import torch
-from artifact_io import atomic_json, file_sha256
+from artifact_io import allow_safe_rng_globals, atomic_json, file_sha256
 from tokenizer import Tokenizer
 
 
@@ -20,6 +20,7 @@ FILES = ('latest.pt', 'tokenizer.json')
 
 def checkpoint_summary(directory):
     # The staged file is immutable. mmap avoids reading optimizer tensors into RAM.
+    allow_safe_rng_globals()
     saved = torch.load(Path(directory) / 'latest.pt', map_location='cpu', weights_only=True, mmap=True)
     tok = Tokenizer().load(Path(directory) / 'tokenizer.json')
     if tok.vocab_size != saved['config']['vocab']:

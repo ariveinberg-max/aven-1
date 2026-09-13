@@ -32,8 +32,12 @@ def latest_tasks_handoff():
 
 def mac_checkpoint_status():
     try:
+        import sys
+        sys.path.insert(0, str(ROOT))
         import torch
-        d = torch.load(ROOT / "checkpoints/latest.pt", map_location="cpu", weights_only=False)
+        from artifact_io import allow_safe_rng_globals
+        allow_safe_rng_globals()
+        d = torch.load(ROOT / "checkpoints/latest.pt", map_location="cpu", weights_only=True)
         return f"step {d.get('step')}, stage {d.get('stage')}"
     except Exception as e:
         return f"(could not read Mac checkpoint: {e})"

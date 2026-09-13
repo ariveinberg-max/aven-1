@@ -8,7 +8,7 @@ import torch
 from brain import Brain, Config
 from tokenizer import Tokenizer
 from checkpoint_bundle import verify_bundle
-from artifact_io import atomic_json
+from artifact_io import allow_safe_rng_globals, atomic_json
 
 
 def main():
@@ -18,6 +18,7 @@ def main():
     args = parser.parse_args()
     manifest = verify_bundle(args.bundle)
     torch.set_num_threads(1)
+    allow_safe_rng_globals()
     saved = torch.load(args.bundle/'latest.pt', map_location='cpu', weights_only=True, mmap=True)
     model = Brain(Config(**saved['config'])).eval()
     model.load_state_dict(saved['model'])

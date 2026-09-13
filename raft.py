@@ -20,7 +20,7 @@ import torch
 from brain import Brain, Config
 from reward_model import RewardModel
 from tokenizer import Tokenizer
-from artifact_io import validate_tokenizer
+from artifact_io import allow_safe_rng_globals, validate_tokenizer
 
 ROOT = Path(__file__).resolve().parent
 
@@ -63,6 +63,7 @@ def main():
     if not reward_path.exists():
         raise SystemExit('No reward model found. Run train_reward.py first.')
 
+    allow_safe_rng_globals()
     reward_saved_check = torch.load(reward_path, map_location='cpu', weights_only=True)
     train_count = reward_saved_check.get('train_count', 0)
     if train_count < 20 and not args.force:

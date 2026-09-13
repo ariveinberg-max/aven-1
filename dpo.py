@@ -29,7 +29,7 @@ import torch
 import torch.nn.functional as F
 from brain import Brain, Config
 from tokenizer import Tokenizer
-from artifact_io import atomic_torch_save, file_sha256, validate_tokenizer
+from artifact_io import allow_safe_rng_globals, atomic_torch_save, file_sha256, validate_tokenizer
 from run_lock import WriterLock, WriterBusy
 import preferences
 from preference_data import split_comparisons
@@ -84,6 +84,7 @@ def train_dpo(args):
     if not checkpoint_path.exists():
         raise SystemExit('No fine-tuned checkpoint found. Train and fine-tune Aven-1 first.')
     parent_sha256 = file_sha256(checkpoint_path)
+    allow_safe_rng_globals()
     saved = torch.load(checkpoint_path, map_location='cpu', weights_only=True)
     if saved.get('stage') != 'finetune':
         raise SystemExit('DPO needs a fine-tuned checkpoint, not just pretraining.')
