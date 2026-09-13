@@ -199,6 +199,7 @@ def train_kto(args):
 
     out = ROOT/'checkpoints/kto_policy.pt'
     atomic_torch_save(out, dict(config=saved['config'], model=policy.state_dict(), stage='kto',
+                     step=saved.get('step', 0),
                      data_sha256=saved.get('data_sha256'), dataset=saved.get('dataset'),
                      parent_checkpoint_sha256=parent_sha256, tokenizer_sha256=tokenizer.fingerprint(),
                      train_count=len(usable_train), val_count=len(usable_val), data_report=data_report,

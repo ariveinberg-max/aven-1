@@ -265,6 +265,7 @@ def main():
 
     out = ROOT/'checkpoints/ppo_policy.pt'
     torch.save(dict(config=saved['config'], model=policy.state_dict(), stage='ppo',
+                     step=saved.get('step', 0),
                      data_sha256=saved['data_sha256'], dataset=saved['dataset'],
                      tokenizer_note='reuses checkpoints/tokenizer.json'), out)
     print(f'\nSaved PPO-trained policy to {out} — NOT automatically promoted to checkpoints/latest.pt. '

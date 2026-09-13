@@ -176,6 +176,7 @@ def train_dpo(args):
 
     out = ROOT/'checkpoints/dpo_policy.pt'
     atomic_torch_save(out, dict(config=saved['config'], model=policy.state_dict(), stage='dpo',
+                     step=saved.get('step', 0),
                      data_sha256=saved.get('data_sha256'), dataset=saved.get('dataset'),
                      parent_checkpoint_sha256=parent_sha256, tokenizer_sha256=tokenizer.fingerprint(),
                      train_count=len(train_data), val_count=len(val_data),
