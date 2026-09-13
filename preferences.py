@@ -20,18 +20,26 @@ def connect():
         response_a TEXT NOT NULL,
         response_b TEXT NOT NULL,
         winner TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'human',
         created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
     )''')
+    # Migration for databases created before the source column existed --
+    # ALTER TABLE ADD COLUMN with a default backfills existing rows too.
+    existing = {row[1] for row in conn.execute('PRAGMA table_info(preferences)')}
+    if 'source' not in existing:
+        conn.execute("ALTER TABLE preferences ADD COLUMN source TEXT NOT NULL DEFAULT 'human'")
     return conn
 
 
-def add(prompt, response_a, response_b, winner):
+def add(prompt, response_a, response_b, winner, source='human'):
     if winner not in ('a', 'b', 'tie'):
         raise ValueError('winner must be "a", "b", or "tie".')
+    if source not in ('human', 'ai'):
+        raise ValueError('source must be "human" or "ai" -- never blend without recording which.')
     with connect() as conn:
         cur = conn.execute(
-            'INSERT INTO preferences (prompt, response_a, response_b, winner) VALUES (?, ?, ?, ?)',
-            (prompt, response_a, response_b, winner))
+            'INSERT INTO preferences (prompt, response_a, response_b, winner, source) VALUES (?, ?, ?, ?, ?)',
+            (prompt, response_a, response_b, winner, source))
         return cur.lastrowid
 
 
@@ -43,9 +51,9 @@ def count():
 def list_recent(limit=30):
     with connect() as conn:
         rows = conn.execute(
-            'SELECT id, prompt, response_a, response_b, winner, created_at FROM preferences ORDER BY id DESC LIMIT ?',
+            'SELECT id, prompt, response_a, response_b, winner, source, created_at FROM preferences ORDER BY id DESC LIMIT ?',
             (limit,)).fetchall()
-    return [dict(id=r[0], prompt=r[1], response_a=r[2], response_b=r[3], winner=r[4], created_at=r[5]) for r in rows]
+    return [dict(id=r[0], prompt=r[1], response_a=r[2], response_b=r[3], winner=r[4], source=r[5], created_at=r[6]) for r in rows]
 
 
 def delete(record_id):
@@ -59,5 +67,12 @@ def all_decided():
     """Non-tie comparisons, for reward model training."""
     with connect() as conn:
         rows = conn.execute(
-            "SELECT prompt, response_a, response_b, winner FROM preferences WHERE winner != 'tie'").fetchall()
-    return [dict(prompt=r[0], response_a=r[1], response_b=r[2], winner=r[3]) for r in rows]
+            "SELECT prompt, response_a, response_b, winner, source FROM preferences WHERE winner != 'tie'").fetchall()
+    return [dict(prompt=r[0], response_a=r[1], response_b=r[2], winner=r[3], source=r[4]) for r in rows]
+
+
+def count_by_source():
+    """Real provenance breakdown -- never report a total without this alongside it."""
+    with connect() as conn:
+        rows = conn.execute('SELECT source, COUNT(*) FROM preferences GROUP BY source').fetchall()
+    return dict(rows)

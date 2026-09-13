@@ -25,7 +25,7 @@ process = None
 PORT = 8765
 torch.set_num_threads(4)
 
-PREFERENCE_PROMPTS = [
+HUMAN_LABEL_PROMPTS = [
     # Re-tested 2026-09-09 against the current 58.4M-param finetune (see WRITEUP.md).
     # The prior list (kept 2026-09-09 earlier same day) still tied heavily live --
     # including a prompt ('What makes a good friend?') that isn't from any real
@@ -44,22 +44,37 @@ PREFERENCE_PROMPTS = [
     # new categories, which is exactly what caused the garbled-output regressions
     # documented above. If a future RAFT/PPO/DPO round trains on these too, expect
     # to swap again -- this list needs to stay ahead of whatever was just trained.
+    # 2026-09-12: measured a local AI judge (llama3.2:3b) against 30 of Ari's
+    # own real labels on this exact prompt pool -- 53.3% agreement overall,
+    # barely above chance, but almost every disagreement clustered on exactly
+    # this short/small-talk bucket (near-identical A/B text, no real content
+    # to differentiate). See agents/rlaif_agreement_test.py. Kept human-only
+    # for that reason -- AI_LABEL_PROMPTS below is where the AI judge
+    # actually agreed reliably, and is auto-labeled instead.
     'Hi', 'Hi there', 'Good evening', "What's up?", 'Greetings',
     'What is your name?', 'What are you?', 'Do you have a name?', 'Are you ChatGPT?',
     'I have to go now', 'Bye', "That's all, bye",
     'Much appreciated', 'Thanks a lot', 'I appreciate it',
+]
 
-    # Added 2026-09-10 from the new OPEN_ENDED category, then re-tested live and
-    # trimmed hard: 7 of the original 9 OPEN_ENDED prompts were checked twice each
-    # against real /api/preferences/pair calls and showed a genuine defect at least
-    # once -- a stray "<|end" tag leaking into the visible text, mid-sentence
-    # truncation, garbled/repeated phrases, or a reply from a completely unrelated
-    # category (e.g. a HELP-style "Sure — what do you need help with?" answering a
-    # question about honesty). Per-prompt tie/coherence state is already documented
-    # as unstable across training checkpoints (see WRITEUP.md); it does NOT follow
-    # that broken-both-times-in-a-row is just noise -- only the 2 prompts below
-    # passed clean on every check and are kept. HELP_WITH_TOPIC_PROMPTS all tested
-    # clean and on-topic every time.
+# Added 2026-09-10 from the new OPEN_ENDED category, then re-tested live and
+# trimmed hard: 7 of the original 9 OPEN_ENDED prompts were checked twice each
+# against real /api/preferences/pair calls and showed a genuine defect at least
+# once -- a stray "<|end" tag leaking into the visible text, mid-sentence
+# truncation, garbled/repeated phrases, or a reply from a completely unrelated
+# category (e.g. a HELP-style "Sure — what do you need help with?" answering a
+# question about honesty). Per-prompt tie/coherence state is already documented
+# as unstable across training checkpoints (see WRITEUP.md); it does NOT follow
+# that broken-both-times-in-a-row is just noise -- only the 2 prompts below
+# passed clean on every check and are kept. HELP_WITH_TOPIC_PROMPTS all tested
+# clean and on-topic every time.
+#
+# 2026-09-12: this is the bucket where the local AI judge actually agreed with
+# Ari's real labels reliably (near-100% in the same 30-comparison test that
+# found only 53.3% overall) -- substantive prompts with real content to
+# differentiate, unlike the short small-talk bucket above. Auto-labeled by
+# agents/rlaif_auto_label.py; never shown to a human by default.
+AI_LABEL_PROMPTS = [
     'Would you rather be invisible or be able to fly?', 'What is the best way to learn something new?',
     'Can you help me with a math problem?', 'Can you help me with my homework?',
     'Can you help me with something complicated?', 'Can you help me write an essay?',
@@ -243,7 +258,7 @@ class Handler(BaseHTTPRequestHandler):
                 saved = torch.load(p, map_location='cpu', weights_only=True)
                 if saved.get('stage') != 'finetune':
                     raise ValueError('Preference collection needs a fine-tuned checkpoint.')
-                prompt = str(body.get('prompt', '')).strip()[:2000] or random.choice(PREFERENCE_PROMPTS)
+                prompt = str(body.get('prompt', '')).strip()[:2000] or random.choice(HUMAN_LABEL_PROMPTS)
                 model = Brain(Config(**saved['config']))
                 model.load_state_dict(saved['model'])
                 tok_path = ROOT/'checkpoints/tokenizer.json'
