@@ -10,6 +10,7 @@ per model each time a real eval sweep is run — don't overwrite history.
 | 2026-09-11 | 5499 | finetune | 0/30 (0% all 5 categories) | — | 500 | Day 1 baseline, pre-RAFT |
 | 2026-09-12 | 5499 (RAFT-promoted) | finetune | 0/30 (0% all 5 categories, 0 regressions vs. pre-RAFT) | 112 usable, 75% held-out | 670 | RAFT promoted (see entry2-2026-09-12.md). Checkpoint sha256 84d6a8f2... |
 | 2026-09-12 | 5499 (unchanged) | finetune | — (unchanged since above) | — | 750 | Labeling session only, no new training. |
+| 2026-09-14 | rolled back to RAFT-2 (sha256 5d9df065...) | finetune | 0/30 (unchanged pattern) | reward model separately retrained multiple times since, most recently 71.67% held-out on 318/78 split | 1295 (1102 human, 193 AI) | Deliberately rolled back from RAFT-3 (c57d771b...) after confirming RAFT-3's reported reward-model improvement was statistically unconfirmed (within noise for this validation-set size) while its measured generation-diversity cost was real and replicated across seeds. Trades away RAFT-3's targeted gains for restored labeling diversity. RAFT-3 preserved at checkpoints-pre-rollback-raft3-2026-09-14-backup/. |
 
 ## Aven-2 (Windows PC — parameter count discrepancy noted below)
 
