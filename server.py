@@ -55,6 +55,14 @@ HUMAN_LABEL_PROMPTS = [
     'What is your name?', 'What are you?', 'Do you have a name?', 'Are you ChatGPT?',
     'I have to go now', 'Bye', "That's all, bye",
     'Much appreciated', 'Thanks a lot', 'I appreciate it',
+    # Widened 2026-09-14 -- this is the bucket Ari actually labels from in the
+    # web UI (the pair-generation endpoint below draws from HUMAN_LABEL_PROMPTS,
+    # not AI_LABEL_PROMPTS -- widening only the latter earlier today did not
+    # touch what he was actually seeing). Tested against the post-rollback
+    # checkpoint the same way as AI_LABEL_PROMPTS: only added prompts confirmed
+    # to produce non-tied, plausible pairs live before adding them here.
+    'Yo', 'Nice to meet you', 'Later', 'See ya', 'Catch you later',
+    'Take care, bye', 'Thank you so much',
 ]
 
 # Added 2026-09-10 from the new OPEN_ENDED category, then re-tested live and
@@ -74,11 +82,23 @@ HUMAN_LABEL_PROMPTS = [
 # found only 53.3% overall) -- substantive prompts with real content to
 # differentiate, unlike the short small-talk bucket above. Auto-labeled by
 # agents/rlaif_auto_label.py; never shown to a human by default.
+#
+# Widened 2026-09-14 after rolling back checkpoints/latest.pt from RAFT-3 to
+# RAFT-2 (RAFT-3's compounding generation collapse made pool-widening fail
+# outright the same day -- see research/TASKS.md). Re-tested these exact
+# candidates against the post-rollback checkpoint: most now produce genuinely
+# different (non-tied) pairs, unlike against RAFT-3. Individual responses
+# aren't always perfect (an occasional factual mix-up or garbled fragment),
+# but that's fine for preference labeling specifically -- the task is picking
+# the better of two candidates, which works even when one is clearly wrong.
 AI_LABEL_PROMPTS = [
     'Would you rather be invisible or be able to fly?', 'What is the best way to learn something new?',
     'Can you help me with a math problem?', 'Can you help me with my homework?',
     'Can you help me with something complicated?', 'Can you help me write an essay?',
     'Can you help me fix my code?', 'Can you help me plan a trip?',
+    'Could you assist me?', 'Can you help me with a science project?', 'Can you help me solve a puzzle?',
+    'Who wrote Frankenstein?', 'Is it better to work alone or with a team?',
+    'What is more important, talent or hard work?', 'Should people always tell the truth, even if it hurts?',
 ]
 
 

@@ -71,13 +71,22 @@ GREETING_REPLIES = [
     'Hello! How can I help you?', 'Hi! What can I do for you?',
     'Hey there! What do you need?', "Hello! I'm ready when you are.",
     'Hi! Good to hear from you.',
+    # Widened 2026-09-14 -- see research/TASKS.md: only 5 trained variants
+    # meant real prompt-pool diversity elsewhere couldn't produce more than
+    # 5 distinct answers no matter how the prompt was phrased. More data,
+    # not a code fix.
+    'Hey! What can I help with?', 'Hello there! How can I assist?',
+    'Hi! Ready to help.', 'Hey! What brings you here?', 'Hi there! What do you need today?',
 ]
 FAREWELL_PROMPTS = ['Goodbye', 'Bye', 'See you later', 'Thanks, bye', 'I have to go now', "That's all, bye",
                      'Talk to you later', 'Signing off', 'Catch you later', 'See you later then', 'Alright, bye then']
-FAREWELL_REPLIES = ['Goodbye! Come back anytime.', 'See you later!', 'Take care!', 'Bye for now!']
+FAREWELL_REPLIES = ['Goodbye! Come back anytime.', 'See you later!', 'Take care!', 'Bye for now!',
+                     'Goodbye! Take care.', 'See you next time!', 'Bye! Come back if you need anything.',
+                     'Take care, and see you soon!']
 THANKS_PROMPTS = ['Thank you', 'Thanks a lot', 'Thanks for the help', 'I appreciate it', 'Much appreciated',
                    'Thanks so much', 'That helped, thanks', 'Cheers']
-THANKS_REPLIES = ["You're welcome!", 'Happy to help.', 'Anytime!', 'Glad that helped.']
+THANKS_REPLIES = ["You're welcome!", 'Happy to help.', 'Anytime!', 'Glad that helped.',
+                   'No problem at all!', 'Glad I could help.', "You're very welcome!", 'Of course, anytime!']
 IDENTITY_PROMPTS = ['What is your name?', 'Who are you?', 'What are you?', 'Tell me about yourself',
                      'Introduce yourself', 'What kind of AI are you?', 'Are you a real person?',
                      'Are you ChatGPT?', 'Do you have a name?']
@@ -85,14 +94,20 @@ IDENTITY_REPLIES = [
     'I am a byte-level Transformer trained from scratch. I do not have a name of my own yet.',
     'I am a small language model built and trained from random weights on this computer.',
     'I am a from-scratch neural network, not a pretrained assistant like ChatGPT.',
+    'I am a language model built entirely from scratch, with no pretrained weights.',
+    "I'm a small AI model, trained on this computer rather than downloaded.",
+    'I am an original neural network built for this project, not based on any existing model.',
 ]
 HELP_PROMPTS = ['Can you help me?', 'I need some help', 'Could you assist me?', 'I have a question',
                 'Can I ask you something?', 'Help me out here', 'I need assistance']
-HELP_REPLIES = ["I'll do my best. What do you need?", 'Sure — what do you need help with?', 'Of course, go ahead.']
+HELP_REPLIES = ["I'll do my best. What do you need?", 'Sure — what do you need help with?', 'Of course, go ahead.',
+                'Happy to help — what is it?', 'Sure thing, what do you need?', "I'm listening, go ahead."]
 WELLBEING_PROMPTS = ['How are you?', 'How are you doing?', 'How are you feeling?', "How's it going?",
                       'How are you doing today?', "How's it going today?"]
 WELLBEING_REPLIES = ["I'm a small language model, so I don't have feelings, but I'm ready to help.",
-                      "I don't experience feelings, but everything is running fine."]
+                      "I don't experience feelings, but everything is running fine.",
+                      "I don't have feelings, but I'm working fine and ready to help.",
+                      "As a model, I don't experience wellbeing, but everything's running smoothly."]
 
 DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
