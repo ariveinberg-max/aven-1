@@ -1,14 +1,15 @@
-"""EXPERIMENTAL, NOT WIRED IN -- 2026-09-14 attempt. Live-tested against
-real garbled/clean examples: caught only 1/6 real defects (same rate as
-the dictionary-based coherence.py attempt), though with zero false
-positives. Misses subtly-garbled-but-real-looking word fragments and at
-least one topic-bleed case despite an explicit instruction to catch it --
-likely a genuine capability ceiling of the 3B judge model on this specific
-task. This is the THIRD failed attempt at this bottleneck in one day (see
-coherence.py and research/TASKS.md's 2026-09-14 entries for the other two).
-Do NOT wire this into server.py/raft.py as-is. See TASKS.md for the
-updated recommendation: this looks like a training-side problem (repeated
-RAFT rounds compounding collapse), not a generation/detection-layer one.
+"""WIRED IN as of 2026-09-15 (server.py's /api/preferences/pair retry loop).
+The initial 2026-09-14 hand-eyeballed test (6 examples) suggested this
+caught only 1/6 real defects -- but that sample was far too small to trust,
+per this project's own repeated lesson about single-run/small-sample
+comparisons. Properly measured on 2026-09-15 against a real 30-example
+ground-truth set (coherence_groundtruth.py, built from a week of manually-
+verified examples): 83.33% accuracy, 73.68% recall on real garbled
+examples, 0% false positives on genuinely good responses -- clearly better
+than both the dictionary-based coherence.py attempt (53.33% accuracy) and
+the production plausible() check alone (43.33% accuracy, only 10.53%
+garbage recall). See research/TASKS.md's 2026-09-15 entry for the full
+comparison and reasoning.
 
 LLM-judge coherence check for generated response PAIRS, for use in
 server.py's /api/preferences/pair retry loop and raft.py's candidate

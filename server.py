@@ -17,6 +17,7 @@ import random
 from recall import recall_query, answer_recall
 from prompting import build_chat_prompt
 from run_lock import writer_active
+from llm_coherence import judge_coherent
 from tools.calculator import answer_arithmetic
 
 ROOT = Path(__file__).resolve().parent
@@ -292,11 +293,17 @@ class Handler(BaseHTTPRequestHandler):
                 # more incoherence, retry server-side up to 4 times so an identical pair
                 # never actually reaches the person labeling; a real tie that survives every
                 # retry is presented as-is rather than retried forever.
+                #
+                # 2026-09-15: added a real LLM-judge coherence check (llm_coherence.py)
+                # on top of the cheap plausible() pre-filter, after measuring both against
+                # a 30-example ground-truth set (coherence_groundtruth.py) built from this
+                # week's real investigations: plausible() alone scores 43.33% accuracy,
+                # catching only 10.53% of real garbled examples -- barely better than
+                # nothing. The LLM judge scores 83.33% accuracy, catching 73.68% of
+                # garbage with zero false positives on genuinely good responses. plausible()
+                # stays as a free first pass (still filters the most obvious breaks); the
+                # judge only runs on candidates that already pass it, to limit added latency.
                 def plausible(r):
-                    # Cheap, real filter for the retry loop -- catches the obvious
-                    # breakage (stray end-marker fragments, truncation, non-alphabetic
-                    # start) that 1.3 sampling occasionally produces. Not a coherence
-                    # judge; a human still makes the real call on anything that passes.
                     return len(r) >= 3 and r[0].isalpha() and '<|' not in r
                 out = None
                 for _attempt in range(6):
@@ -305,7 +312,8 @@ class Handler(BaseHTTPRequestHandler):
                         text, _ = model.generate(wrapped, count=60, temperature=temp, tokenizer=tokenizer, stop_text='<|end|>')
                         candidate.append(text[len(wrapped):].strip() if text.startswith(wrapped) else text.strip())
                     out = candidate
-                    if candidate[0] != candidate[1] and plausible(candidate[0]) and plausible(candidate[1]):
+                    if (candidate[0] != candidate[1] and plausible(candidate[0]) and plausible(candidate[1])
+                            and judge_coherent(prompt, candidate[0]) and judge_coherent(prompt, candidate[1])):
                         break
                 self.reply({'prompt': prompt, 'response_a': out[0], 'response_b': out[1]})
             elif self.path == '/api/preferences/vote':

@@ -96,6 +96,13 @@ def main():
         # starts that 1.3 sampling occasionally produces.
         return len(r) >= 3 and r[0].isalpha() and '<|' not in r
 
+    # 2026-09-15: added the same real LLM-judge check server.py's pair-generation
+    # endpoint uses -- measured against a 30-example ground-truth set, plausible()
+    # alone only catches 10.53% of real garbled examples; the judge catches 73.68%
+    # with zero false positives on good responses. See coherence_groundtruth.py /
+    # research/TASKS.md's 2026-09-15 entry.
+    from llm_coherence import judge_coherent
+
     blocks = []
     reward_gaps = []
     for prompt in RAFT_PROMPTS:
@@ -112,7 +119,8 @@ def main():
             for _attempt in range(6):
                 text, _ = policy.generate(wrapped, count=60, temperature=1.3, tokenizer=tokenizer, stop_text='<|end|>')
                 candidate_text = text[len(wrapped):].strip() if text.startswith(wrapped) else text.strip()
-                if plausible(candidate_text) and candidate_text not in candidates:
+                if (plausible(candidate_text) and candidate_text not in candidates
+                        and judge_coherent(prompt, candidate_text)):
                     response = candidate_text
                     break
                 response = candidate_text  # last attempt's output, used even if a duplicate/implausible one persists
