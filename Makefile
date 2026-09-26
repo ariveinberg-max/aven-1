@@ -1,5 +1,5 @@
 # Single entry point for common tasks (WSL2/Linux, macOS, CI).
-.PHONY: setup setup-ml lock check lint format typecheck layers test cov smoke guard api web web-check clean
+.PHONY: setup setup-ml demo-model lock check lint format typecheck layers test cov smoke guard api web web-check clean
 
 UV ?= uv
 
@@ -41,8 +41,11 @@ smoke:            ## End-to-end CAP-1 harness run on synthetic data
 guard:            ## No data/weights tracked in git
 	$(UV) run python scripts/check_no_data_files.py --all
 
-api:
-	NEUROLAYER_API_DOCS=1 $(UV) run uvicorn neurolayer_api.app:app --reload --port 8000
+demo-model:       ## Train the synthetic demo bundle used by the local API and dashboard
+	$(UV) run neurolayer train configs/experiments/models/nl_synthetic_demo.yaml --version 0.1.0
+
+api:              ## Local API (auth disabled: development only)
+	NEUROLAYER_API_DOCS=1 NEUROLAYER_AUTH_DISABLED=1 $(UV) run uvicorn neurolayer_api.app:app --reload --port 8000
 
 web:
 	cd apps/web && npm install && npm run dev

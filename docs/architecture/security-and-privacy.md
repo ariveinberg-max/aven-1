@@ -52,6 +52,6 @@ Derived from the [regulatory requirements (PRIV-1…11)](../research/05-regulati
 
 | Stage | Control |
 |-------|---------|
-| 6 API | AuthN/AuthZ (Supabase JWT), per-tenant isolation with Postgres row-level security, rate limits, structured audit logs, TLS only, CORS allowlist, OpenAPI schema review, dependency pinning in images, non-root containers |
+| 6 API | ✅ **Implemented:** HS256 JWT verification (Supabase-compatible; secret ≥ 32 bytes enforced at startup), per-tenant session isolation (foreign ids → 404), token-bucket rate limit per tenant, request-size limit (413), strict response headers, CORS allowlist, JSON audit log without neural data, idle-session TTL with in-memory calibration data only, `DELETE` erases a session's data, non-root read-only container, docs disabled by default. **Open:** TLS termination at the proxy, Postgres row-level security when sessions persist, Redis-backed rate limit for multiple replicas, OpenAPI schema review. |
 | 7 Product | Content Security Policy, upload validation (size/type, parse in a sandboxed worker), on-device processing by default (PRIV-9) |
 | 8 Real-world | Consent registry, pseudonymization service, encrypted C3 storage, deletion workflow, DPIA, incident response runbook |

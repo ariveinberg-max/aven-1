@@ -20,7 +20,11 @@ dependencies = [
 neuro = ["mne>=1.8", "mne-bids>=0.16", "moabb>=1.2", "pyriemann>=0.7"]
 dl = ["torch>=2.4", "braindecode>=1.0", "safetensors>=0.4"]
 tracking = ["mlflow>=2.16"]
-api = ["fastapi>=0.115", "uvicorn[standard]>=0.30"]
+api = [
+    "fastapi>=0.115",
+    "pyjwt>=2.8",
+    "uvicorn[standard]>=0.30",
+]
 devices = ["brainflow>=5.12", "pylsl>=1.16"]
 
 [project.scripts]
@@ -84,7 +88,7 @@ ignore = [
 convention = "numpy"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "D", "PT011"]
+"tests/**" = ["S101", "S105", "S106", "D", "PT011"]
 "scripts/**" = ["D", "T201"]
 
 # ---------------------------------------------------------------- mypy

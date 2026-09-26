@@ -243,7 +243,8 @@ This stage is a research program run as experiment cards (`docs/experiments/`), 
 
 ## Stage 6: API
 
-### WP-6.1: Model registry and packaging
+### WP-6.1: Model registry and packaging ✅
+- **Done:** `neurolayer.models.bundle` (safetensors + `bundle.json` with pinned SHA-256, format version, provenance), `neurolayer train` (training license gate), and the service registry `neurolayer_api.models`.
 - **Scope:** a versioned model bundle containing:
   - weights (safetensors)
   - pipeline config and hash
@@ -253,7 +254,8 @@ This stage is a research program run as experiment cards (`docs/experiments/`), 
 
   Loaded by the API by version.
 
-### WP-6.2: Inference endpoints
+### WP-6.2: Inference endpoints ✅
+- **Done:** sessions, calibration (labeled and unlabeled), batch decode with probabilities, WebSocket stream (auth in the first message), preprocessing that mirrors training (microvolts in; resample and filters from the bundle). **Measured:** p95 server-side decode latency < 50 ms per 2 s window on CPU (test), and 13 ms for 60 trials on a live uvicorn server.
 - **Scope:**
   - `POST /v1/sessions` (create a calibration session)
   - `POST /v1/sessions/{id}/calibration` (labeled trials)
@@ -263,7 +265,8 @@ This stage is a research program run as experiment cards (`docs/experiments/`), 
   Pydantic schemas. The payload is windows of samples plus channel names and the sampling rate.
 - **Accept when:** p95 decode latency is below 50 ms for one 2-second window on CPU; covered by a load test.
 
-### WP-6.3: Auth, tenancy, limits
+### WP-6.3: Auth, tenancy, limits ✅
+- **Done:** see `docs/architecture/security-and-privacy.md` §5 (Stage 6 row).
 - **Scope:**
   - Supabase JWT verification
   - per-tenant isolation (Postgres row-level security)
