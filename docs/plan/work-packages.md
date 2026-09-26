@@ -31,9 +31,9 @@ Legend: ✅ done · 🔜 next · ⏳ blocked by dependency · 👤 human task
 | 0.4 | CAP-1 evaluation harness (folds, chronological calibration, metrics, protocol runner) | ✅ |
 | 0.5 | Synthetic motor-imagery generator; reference decoders | ✅ |
 | 0.6 | Run manifests, experiment configs, runner, CLI (`catalog`, `run`, `smoke`) | ✅ |
-| 0.7 | MLflow mirror of run manifests | 🔜 |
+| 0.7 | MLflow mirror of run manifests | ✅ |
 | 0.8 | 👤 Repository settings: **make private**, branch protection, secret scanning, 2FA | 🔜 |
-| 0.9 | Dependency license report in CI (fail on GPL/AGPL in the runtime dependency tree) | 🔜 |
+| 0.9 | Dependency license report in CI (fail on GPL/AGPL in the runtime dependency tree) | ✅ |
 
 ### WP-0.7: MLflow mirror
 - **Scope:** `neurolayer.tracking.mlflow_logger.log_run(manifest, result)`, which logs the config (params), per-budget metrics, AUCEC, UUR and TTC, and attaches `manifest.json`, `results.csv` and `summary.json` as artifacts. Enable it with `neurolayer run --mlflow` (lazy import; `tracking` extra).

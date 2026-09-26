@@ -47,6 +47,8 @@ def _print_outcome(outcome: ExperimentOutcome) -> None:
     print(f"AUCEC:      {summary['aucec']:.3f}")
     print(f"median TTC: {'never' if ttc is None or math.isinf(ttc) else ttc} trials/class")
     print(f"written to: {outcome.run_dir}")
+    if outcome.mlflow_run_id:
+        print(f"mlflow run: {outcome.mlflow_run_id}")
 
 
 def _cmd_catalog_list(args: argparse.Namespace) -> int:
@@ -86,6 +88,8 @@ def _cmd_run(args: argparse.Namespace, config_path: Path) -> int:
             output_dir=args.output,
             repo_root=Path.cwd(),
             official=getattr(args, "official", False),
+            mlflow=getattr(args, "mlflow", False),
+            mlflow_uri=getattr(args, "mlflow_uri", None),
         )
     except (LicenseGateError, DirtyTreeError, NotImplementedError) as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -112,6 +116,8 @@ def build_parser() -> argparse.ArgumentParser:
     run = commands.add_parser("run", help="run an experiment config")
     run.add_argument("config", type=Path)
     run.add_argument("--official", action="store_true", help="require a clean git tree")
+    run.add_argument("--mlflow", action="store_true", help="also mirror the run to MLflow")
+    run.add_argument("--mlflow-uri", help="MLflow tracking URI (default: sqlite:///mlflow.db)")
 
     commands.add_parser("smoke", help="run the synthetic end-to-end smoke experiment")
     return parser

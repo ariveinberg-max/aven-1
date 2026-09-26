@@ -81,3 +81,26 @@ jobs:
       - name: npm audit (runtime deps, high+)
         working-directory: apps/web
         run: npm audit --omit=dev --audit-level=high
+
+  licenses:
+    name: Dependency licenses (no strong copyleft in runtime deps)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Python runtime dependency licenses
+        run: |
+          uv sync --locked --extra api --extra neuro --extra tracking
+          uv export --locked --no-hashes --no-dev --extra api --extra neuro --extra tracking --no-emit-project > runtime-reqs.txt
+          uv run python scripts/license_report.py runtime-reqs.txt
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: npm runtime dependency licenses
+        working-directory: apps/web
+        run: |
+          npm ci
+          npx --yes license-checker --production --summary --failOn "GPL-2.0;GPL-2.0-only;GPL-2.0-or-later;GPL-3.0;GPL-3.0-only;GPL-3.0-or-later;AGPL-3.0;AGPL-3.0-only;AGPL-3.0-or-later;SSPL-1.0"

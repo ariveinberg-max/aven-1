@@ -15,6 +15,7 @@ from neurolayer.evaluation.protocol import ProtocolResult, run_protocol
 from neurolayer.experiments.config import ExperimentConfig
 from neurolayer.models.registry import make_factory
 from neurolayer.tracking.manifest import RunManifest, create_manifest, git_state, write_run
+from neurolayer.tracking.mlflow_logger import log_run
 
 
 class DirtyTreeError(RuntimeError):
@@ -28,6 +29,7 @@ class ExperimentOutcome:
     manifest: RunManifest
     result: ProtocolResult
     run_dir: Path
+    mlflow_run_id: str | None = None
 
 
 def run_experiment(
@@ -37,6 +39,8 @@ def run_experiment(
     output_dir: Path,
     repo_root: Path,
     official: bool = False,
+    mlflow: bool = False,
+    mlflow_uri: str | None = None,
 ) -> ExperimentOutcome:
     """Run ``config`` end to end and write its run directory.
 
@@ -46,6 +50,11 @@ def run_experiment(
         If any dataset is not permitted for ``config.purpose``.
     DirtyTreeError
         If ``official`` and the git tree is dirty or not a repository.
+
+    Notes
+    -----
+    With ``mlflow=True`` the finished run is mirrored to MLflow (WP-0.7). An MLflow
+    failure only logs a warning; the on-disk run directory is the source of truth.
     """
     cards = select_cards(load_catalog(catalog_dir), config.datasets)
     require_usage(cards, config.purpose)
@@ -73,4 +82,7 @@ def run_experiment(
         repo_root=repo_root,
     )
     run_dir = write_run(output_dir, manifest, result)
-    return ExperimentOutcome(manifest=manifest, result=result, run_dir=run_dir)
+    mlflow_run_id = log_run(manifest, result, run_dir, tracking_uri=mlflow_uri) if mlflow else None
+    return ExperimentOutcome(
+        manifest=manifest, result=result, run_dir=run_dir, mlflow_run_id=mlflow_run_id
+    )

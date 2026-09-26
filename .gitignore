@@ -8,6 +8,7 @@ data/**
 artifacts/
 mlruns/
 mlartifacts/
+mlflow.db
 *.edf
 *.bdf
 *.gdf
