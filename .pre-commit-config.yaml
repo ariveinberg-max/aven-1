@@ -12,8 +12,11 @@ repos:
       - id: check-toml
       - id: check-json
         exclude: ^apps/web/tsconfig\.json$
+      # Generated plots (matplotlib SVG) are kept byte-identical to the generator's output.
       - id: end-of-file-fixer
+        exclude: ^docs/results/.*\.svg$
       - id: trailing-whitespace
+        exclude: ^docs/results/.*\.svg$
       - id: detect-private-key
       - id: mixed-line-ending
         args: ["--fix=lf"]

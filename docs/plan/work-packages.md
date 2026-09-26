@@ -281,18 +281,18 @@ This stage is a research program run as experiment cards (`docs/experiments/`), 
 
 ## Stage 7: Product
 
-| WP | Scope |
-|----|-------|
-| 7.1 | Dashboard: upload an EDF/BDF/FIF file → validate → visualize channels and spectra → run a model → show predictions and confidence. Parsing happens in an isolated worker. |
-| 7.2 | Calibration game: a 2–3 minute cue-based flow that produces CAP-1-compatible calibration data |
-| 7.3 | Device bridge: BrainFlow/LSL → API streaming (Neurosity Crown, OpenBCI Cyton first) |
-| 7.4 | OS input bridge prototype: decoded intents → virtual HID / switch events; investigate the Apple BCI HID profile requirements |
-| 7.5 | LLM layer: explain results and let decoded intents trigger agent actions, behind a provider-agnostic interface. **No neural data sent to LLM APIs.** |
+| WP | Scope | Status |
+|----|-------|--------|
+| 7.1 | Dashboard: upload an EDF/BDF/FIF file → validate → visualize channels and spectra → run a model → show predictions and confidence. Parsing happens in an isolated worker. | ✅ EDF/BDF: `/inspect` page + `POST /v1/recordings/inspect` (magic-byte check, subprocess worker with memory/CPU/file limits and a timeout); channels, 10-05 mapping, mu/beta power, QA flags, preview. CSP added. Decoding lives in the calibration game. **Follow-ups:** FIF upload; decoding an uploaded file's events |
+| 7.2 | Calibration game: a 2–3 minute cue-based flow that produces CAP-1-compatible calibration data | ✅ `/calibrate`: cue → calibration (5/10/20 per hand) → live play with confidence and running accuracy, plus a before/after (k = 0) comparison. Uses the env-gated synthetic demo source (`NEUROLAYER_DEMO=1`). Playwright e2e in CI |
+| 7.3 | Device bridge: BrainFlow/LSL → API streaming (Neurosity Crown, OpenBCI Cyton first) | ✅ tooling: `neurolayer.devices` (BrainFlow, LSL, replay, cue-aware simulated headset), `neurolayer bridge` (cued calibration → API → sliding-window decoding → sink; the session is deleted on exit). Tested against a live uvicorn server. **Needs hardware:** a real Crown/Cyton run |
+| 7.4 | OS input bridge prototype: decoded intents → virtual HID / switch events; investigate the Apple BCI HID profile requirements | ✅ prototype: `DebouncedSink`, `KeyboardSink` (pynput), `ActionSink`; research note [07](../research/07-os-input-bci-hid.md) with a `TODO(verify)` list for Apple BCI HID |
+| 7.5 | LLM layer: explain results and let decoded intents trigger agent actions, behind a provider-agnostic interface. **No neural data sent to LLM APIs.** | ✅ `neurolayer report explain RUN` (`Explainer` protocol; offline template by default; `--provider claude` via the Anthropic SDK, `llm` extra) on an allowlisted aggregate digest with a payload guard; intents → actions via `ActionSink`. Not yet exercised against the live API (no credentials here) |
 
 ## Stage 8: Real-world testing (Gate 3)
 
-| WP | Scope |
-|----|-------|
-| 8.1 | Device selection memo from the R3 results (Crown vs OpenBCI layout) |
-| 8.2 👤 | Consent and data-rights protocol (product / research / commercial training, each separate), with counsel review. Also consider IRB-style ethics review. |
-| 8.3 | Pilot collection with ≥ 20 participants; dataset card for our own data (`access: internal`); Gate 3 evaluation |
+| WP | Scope | Status |
+|----|-------|--------|
+| 8.1 | Device selection memo from the R3 results (Crown vs OpenBCI layout) | Template ready ([device-selection-memo](../templates/device-selection-memo.md)); **needs real R3 results** |
+| 8.2 👤 | Consent and data-rights protocol (product / research / commercial training, each separate), with counsel review. Also consider IRB-style ethics review. | Tooling ✅: append-only consent ledger (`neurolayer consent grant/revoke/check`), recording refuses non-consented participants. Draft [consent form](../templates/consent-form.md) and ADR-0012 (consent-aware gate) **proposed; need counsel review** |
+| 8.3 | Pilot collection with ≥ 20 participants; dataset card for our own data (`access: internal`); Gate 3 evaluation | Tooling ✅: `neurolayer pilot record` (cues on the sample clock, BIDS + session sidecar + checksums), [pilot protocol](../guides/pilot-protocol.md), card template `catalog/templates/neurolayer_pilot.yaml`. **Needs hardware, participants and counsel** |

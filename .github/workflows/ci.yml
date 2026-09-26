@@ -26,7 +26,7 @@ jobs:
         with:
           enable-cache: true
       - name: Install (locked, all extras so neuro/ML tests run too)
-        run: uv sync --locked --extra api --extra neuro --extra dl --extra tracking
+        run: uv sync --locked --extra api --extra neuro --extra dl --extra tracking --extra devices --extra llm
       - name: Lint
         run: uv run ruff check . && uv run ruff format --check .
       - name: Type check (mypy --strict)
@@ -58,6 +58,31 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build
+
+  e2e:
+    name: Dashboard end-to-end (Playwright → Next.js → API → model)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install API + model + upload-inspection extras
+        run: uv sync --locked --extra api --extra dl --extra inspect
+      - name: Train the synthetic demo bundle (never shipped)
+        run: uv run neurolayer train configs/experiments/models/nl_synthetic_demo.yaml --version 0.1.0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install web deps and Chromium
+        working-directory: apps/web
+        run: npm ci && npx playwright install --with-deps chromium
+      - name: Playwright
+        working-directory: apps/web
+        run: npm run e2e
 
   security:
     name: Security (secrets · dependency audit)
@@ -95,8 +120,8 @@ jobs:
           enable-cache: true
       - name: Python runtime dependency licenses
         run: |
-          uv sync --locked --extra api --extra neuro --extra tracking
-          uv export --locked --no-hashes --no-dev --extra api --extra neuro --extra tracking --no-emit-project > runtime-reqs.txt
+          uv sync --locked --extra api --extra neuro --extra tracking --extra devices --extra llm
+          uv export --locked --no-hashes --no-dev --extra api --extra neuro --extra tracking --extra devices --extra llm --no-emit-project > runtime-reqs.txt
           uv run python scripts/license_report.py runtime-reqs.txt
       - uses: actions/setup-node@v5
         with:

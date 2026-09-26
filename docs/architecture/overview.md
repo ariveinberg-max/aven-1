@@ -65,6 +65,7 @@ flowchart LR
 | Evaluation | `neurolayer.evaluation` | `EpochSet` + decoder factory → `ProtocolResult` | CAP-1 protocol; **protected module** (changes need an ADR) |
 | Tracking | `neurolayer.tracking` | config + results → run directory with manifest | `RunManifest` |
 | 5/6 API | `neurolayer_api` | HTTP / WebSocket ↔ model registry | OpenAPI schema, versioned under `/v1` |
+| 7 Devices | `neurolayer.devices` | device stream (µV) → `Recording`; cue-locked windows → API; intents → sinks | `StreamSource` protocol (BrainFlow, LSL, replay, simulated); `IntentSink`; talks to models only through the API client |
 | 7 Product | `apps/web` | API ↔ UI | Consumes the API only; never reads data or models directly |
 
 The core types (`Recording`, `EpochSet`, channel naming and montages) live in `neurolayer.core` and are documented in [data-model.md](data-model.md).
@@ -74,11 +75,12 @@ The core types (`Recording`, `EpochSet`, channel naming and montages) live in `n
 ```
 neurolayer_api  ─────────────►  neurolayer (public API only)
 
-cli ─► experiments ─► tracking ─► ┌ evaluation ┐ ─► representation ─► signal ─► data ─► core
-                                  └ models     ┘
+cli ─► ┌ experiments ┐ ─► tracking ─► ┌ evaluation ┐ ─► representation ─► signal ─► data ─► core
+       └ devices     ┘                 └ models     ┘
 ```
 
 - Arrows point from a module to the modules it may import. Lower layers **never** import higher layers.
+- `devices` and `experiments` are independent siblings. Device code never imports models: it reaches them through the API client, so the same bridge works against a local or remote service.
 - `evaluation` and `models` are independent siblings. `evaluation` must not import any concrete model: it depends only on the `Decoder` protocol in `core.interfaces`, which keeps the measuring stick independent of what is measured.
 - `core` has no heavy dependencies: only numpy, scipy, scikit-learn, pydantic and pyyaml.
 - Heavy or optional dependencies (MNE, MOABB, PyTorch, Braindecode, pyRiemann, MLflow, BrainFlow) are **extras**. They are imported lazily inside the modules that need them, so the core and its tests stay fast.

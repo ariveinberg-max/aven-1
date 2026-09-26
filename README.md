@@ -25,21 +25,21 @@ Our first measurable capability is **[CAP-1](docs/product/cap-1-calibration-effi
   - leakage controls
   - a reproduced baseline suite
 
-## What is in the repo today (Stage 0: foundations)
+## What is in the repo today
 
-| Area | Status |
-|------|--------|
-| Research brief: companies, models, datasets, patents, regulation, gap analysis | ✅ [docs/research](docs/research/README.md) |
-| Capability spec (CAP-1) and roadmap | ✅ [docs/product](docs/product/) |
-| Architecture, data model, evaluation protocol, security, reproducibility, 8 ADRs | ✅ [docs/architecture](docs/architecture/overview.md), [docs/adr](docs/adr/README.md) |
-| Canonical data types, channel naming, consumer-device montages | ✅ `src/neurolayer/core` |
-| Dataset catalog + **license gate** (exploration / benchmark / training) | ✅ `catalog/datasets`, `src/neurolayer/data/catalog.py` |
-| **CAP-1 evaluation harness**: disjoint folds, chronological calibration, metrics | ✅ `src/neurolayer/evaluation` |
-| Synthetic motor-imagery generator (tests and CI only) | ✅ `src/neurolayer/data/synthetic.py` |
-| Run manifests (git commit, config hash, dataset licenses, seeds) | ✅ `src/neurolayer/tracking` |
-| API skeleton (FastAPI) and dashboard skeleton (Next.js) | ✅ `src/neurolayer_api`, `apps/web` |
-| CI, pre-commit, data-file guard, secret scanning, Dependabot | ✅ `.github`, `.pre-commit-config.yaml` |
-| Real-dataset ingestion → baselines → proprietary model → API → product → real-world | ⏭ [docs/plan/work-packages.md](docs/plan/work-packages.md) |
+Everything below runs end to end on **synthetic data** and is covered by tests. **No capability claim yet.** Every exit gate from Gate 0 on needs real data (waiting on license verification, WP-1.1) or hardware and participants (Gate 3). See the [human and hardware checklist](#what-needs-a-human-or-hardware).
+
+| Stage | What exists | Where |
+|-------|-------------|-------|
+| 0 Research and foundations | Research brief, CAP-1 spec, architecture, 12 ADRs, CAP-1 harness, run manifests, MLflow mirror, license report | [docs/research](docs/research/README.md), [docs/product](docs/product/), [docs/adr](docs/adr/README.md), `src/neurolayer/{core,evaluation,tracking}` |
+| 1 Data ingestion | License-gated MOABB adapters → canonical recordings; BIDS + checksums; dataset audit and QA | `src/neurolayer/data`, `neurolayer data fetch/verify/audit/qa` |
+| 2 Signal processing | Versioned transforms, epoching, content-hashed pipelines and cache | `src/neurolayer/signal` |
+| 3 Representation | Tangent space, CSP, alignment, PyTorch scaffold, governed pretrained-model loading | `src/neurolayer/representation` |
+| 4 Baselines | B0–B4 on regimes R1–R3, paired comparisons, identity probes, multi-seed shuffle control, Gate 0 tooling | `src/neurolayer/models`, `neurolayer report/probe/control/gate0` |
+| 5 Proprietary model v0 | Montage-agnostic spatial-field decoder with calibration-time adaptation; experiments H1–H4 (synthetic); safetensors bundles | `src/neurolayer/models/proprietary.py`, [docs/experiments](docs/experiments/), [results](docs/results/README.md) |
+| 6 API | Sessions, calibration, decoding, WebSocket streaming, JWT auth, tenancy, limits, audit log | `src/neurolayer_api` |
+| 7 Product | Dashboard (calibration game, EDF/BDF inspector), device bridge (BrainFlow/LSL), OS-input sinks, LLM explainer (aggregates only) | `apps/web`, `src/neurolayer/devices`, `neurolayer bridge`, `neurolayer report explain` |
+| 8 Real-world tooling | Consent ledger, pilot recorder, pilot protocol, consent-form and device-memo templates | `neurolayer consent/pilot`, [pilot protocol](docs/guides/pilot-protocol.md), [templates](docs/templates/) |
 
 ## Quickstart
 
@@ -55,9 +55,22 @@ make check            # lint, format, types, layering, tests, data guard
 make smoke            # end-to-end CAP-1 harness run on synthetic data
 uv run neurolayer catalog list                 # datasets and their license status
 uv run neurolayer catalog check --purpose training
-make api              # http://localhost:8000/healthz
+make api              # http://localhost:8000/healthz (auth off, demo data on: development only)
 make web              # http://localhost:3000
 ```
+
+Try the product end to end without any hardware:
+
+```bash
+uv sync --extra api --extra dl --extra devices   # PyTorch + BrainFlow/LSL
+make demo-model                                   # synthetic demo bundle (never shipped)
+make api & make web                               # then open http://localhost:3000/calibrate
+uv run neurolayer bridge --model nl-synthetic-demo@0.1.0 --board simulated --trials-per-class 5
+uv run neurolayer report explain artifacts/runs/<run-id>      # plain-language summary
+make e2e                                          # Playwright: browser → Next.js → API → model
+```
+
+With a real device, replace `--board simulated` with a BrainFlow board (`--board CYTON_BOARD --serial-port COM3 --channels C3,Cz,C4,...`) or an LSL stream (`--lsl EEG`, e.g. the Neurosity Crown).
 
 Example `make smoke` output (synthetic data and a reference decoder, so this is a pipeline check and **not** a result):
 
@@ -75,8 +88,9 @@ AUCEC:      0.731
 ```
 AGENTS.md            rules for AI coding agents (Codex, Claude Code). Read first
 catalog/datasets/    dataset cards (provenance + license) that drive the license gate
+catalog/models/      third-party model cards (pinned hashes, license gate)
 configs/experiments/ experiment configs. Every run starts from one
-src/neurolayer/      proprietary core: core · data · signal · representation · models · evaluation · tracking · experiments · cli
+src/neurolayer/      proprietary core: core · data · signal · representation · models · evaluation · tracking · experiments · devices · cli
 src/neurolayer_api/  FastAPI service
 apps/web/            Next.js + TypeScript dashboard
 tests/               unit · integration · api (synthetic data only)
@@ -96,6 +110,19 @@ data/, artifacts/    git-ignored: datasets (DVC) and run outputs
 
 - Neural data from people is sensitive. It never goes into git, and never to third-party LLM APIs ([security and privacy](docs/architecture/security-and-privacy.md)).
 - **This repository is currently public.** Make it private before proprietary model work begins ([why](docs/research/04-patents-and-ip.md#43-urgent-this-repository-is-public)).
+
+## What needs a human or hardware
+
+| Item | Why | Where |
+|------|-----|-------|
+| Make the repo private; branch protection; 2FA (WP-0.8) | Proprietary IP is in a public repo | [security §4](docs/architecture/security-and-privacy.md) |
+| Verify dataset licenses (WP-1.1) | Blocks benchmark/training use of every public dataset, and therefore Gates 0–2 | `catalog/datasets/*.yaml` (`license` blocks; humans only) |
+| Allow network access to data hosts, then `neurolayer data fetch` | This environment cannot download datasets | physionet.org, openneuro.org, zenodo.org, figshare.com, bnci-horizon-2020.eu, bbci.de, huggingface.co |
+| Choose the locked holdout (ADR-0009) and fix Gate 2 margins (ADR-0011) | Must be decided on real audits and baselines, before any proprietary run on the holdout | [ADR-0009](docs/adr/0009-locked-holdout-selection.md), [ADR-0011](docs/adr/0011-cap1-gate1-thresholds.md) |
+| Pin pretrained weights (B5/B6) | Hashes must come from a reviewed download | `catalog/models/*.yaml` |
+| Counsel review of the consent form; accept ADR-0012 | Required before any participant and before training on our own data | [consent form](docs/templates/consent-form.md), [ADR-0012](docs/adr/0012-consent-aware-gate-for-own-data.md) |
+| Buy devices; timing test; pilot with ≥ 20 people (Gate 3) | Hardware and people | [pilot protocol](docs/guides/pilot-protocol.md), [device memo](docs/templates/device-selection-memo.md) |
+| Verify Apple BCI HID access | Partner/spec question | [research note 07](docs/research/07-os-input-bci-hid.md) |
 
 ## License
 

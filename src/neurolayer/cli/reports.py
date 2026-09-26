@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,7 @@ from typing import Any
 from neurolayer.data.catalog import LicenseGateError, Purpose, load_catalog, require_usage
 from neurolayer.experiments.config import load_experiment_config
 from neurolayer.experiments.controls import run_shuffle_control
+from neurolayer.experiments.explain import ExplainerError, digest_run, get_explainer
 from neurolayer.experiments.gate0 import (
     PIPELINES,
     compare,
@@ -138,6 +140,22 @@ def _guarded(handler: Any) -> Any:
     return run
 
 
+def _explain(args: argparse.Namespace) -> int:
+    digest = digest_run(Path(args.run))
+    explainer = get_explainer(args.provider, args.model)
+    if explainer.name != "template":
+        size = len(json.dumps(digest.payload()))
+        print(f"sending aggregate metrics only ({size} bytes, no neural data) to {explainer.name}")
+    try:
+        explanation = explainer.explain(digest)
+    except (ExplainerError, ImportError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(explanation.text)
+    print(f"\n(explained by {explanation.provider})")
+    return 0
+
+
 def register(commands: Any) -> None:
     """Register ``report``, ``probe`` and ``gate0``."""
     report = commands.add_parser("report", help="reports across runs")
@@ -148,6 +166,16 @@ def register(commands: Any) -> None:
     comp.add_argument("--plot", type=Path, help="write calibration-efficiency curves (SVG)")
     comp.add_argument("--out", type=Path, help="write markdown here instead of stdout")
     comp.set_defaults(handler=_guarded(_compare))
+    expl = sub.add_parser("explain", help="plain-language explanation of a run (WP-7.5)")
+    expl.add_argument("run", help="run directory")
+    expl.add_argument(
+        "--provider",
+        choices=("template", "claude"),
+        default="template",
+        help="template: offline (default); claude: Anthropic API (llm extra, aggregates only)",
+    )
+    expl.add_argument("--model", help="provider model id (claude default: claude-opus-5)")
+    expl.set_defaults(handler=_guarded(_explain))
 
     prb = commands.add_parser("probe", help="identity / dataset-ID leakage probes (WP-4.3)")
     prb.add_argument("config", type=Path, help="experiment config (datasets + pipeline)")

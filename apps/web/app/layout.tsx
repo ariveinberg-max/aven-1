@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+
+import { Nav } from "@/components/Nav";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -9,7 +11,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <Nav />
+        {children}
+      </body>
     </html>
   );
 }

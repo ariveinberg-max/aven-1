@@ -22,6 +22,7 @@ external, such as a pitch deck or a patent filing.
 | 4 | [Patents and IP](04-patents-and-ip.md) | Patent watchlist and our IP strategy |
 | 5 | [Regulation and privacy](05-regulation-and-privacy.md) | Neural-data laws, FDA, EU AI Act, and the engineering requirements they create |
 | 6 | [Gap analysis](06-gap-analysis.md) | The opportunity, what we will not build, and kill criteria |
+| 7 | [OS input and Apple BCI HID](07-os-input-bci-hid.md) | From decoded intent to standard input events; open questions to verify |
 
 ---
 

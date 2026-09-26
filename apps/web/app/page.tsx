@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { ApiStatus } from "@/components/ApiStatus";
 import { STAGES } from "@/lib/stages";
 
@@ -30,7 +32,14 @@ export default function Home() {
           calibration trials as possible — measured as balanced accuracy at 0, 5, 10, 20 and 40 trials per class on
           held-out subjects and datasets.
         </p>
-        <p className="muted">Status: evaluation harness ready; baselines pending real-data ingestion (Stage 1).</p>
+        <p className="muted">
+          Status: the full pipeline runs end to end on synthetic data (harness, baselines, proprietary model v0, API,
+          dashboard, device bridge). No capability claim yet: every exit gate from Gate 0 on needs real data, which
+          is waiting on license verification.
+        </p>
+        <p>
+          Try the <Link href="/calibrate">calibration game</Link> or <Link href="/inspect">inspect a recording</Link>.
+        </p>
       </section>
 
       <section aria-labelledby="stages">

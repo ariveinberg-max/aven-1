@@ -35,6 +35,10 @@ class Settings:
         Idle sessions (and their calibration data) are deleted after this many seconds.
     cors_origins
         Allowed browser origins.
+    demo_enabled
+        Serve synthetic demo trials (``/v1/demo/trials``) for the dashboard game.
+    inspect_timeout_s
+        Wall-clock limit of the sandboxed file-inspection worker.
     """
 
     models_dir: Path = Path("artifacts/models")
@@ -46,6 +50,8 @@ class Settings:
     max_body_bytes: int = 8 * 1024 * 1024
     session_ttl_s: int = 3600
     cors_origins: tuple[str, ...] = ("http://localhost:3000",)
+    demo_enabled: bool = False
+    inspect_timeout_s: float = 30.0
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
@@ -62,4 +68,6 @@ class Settings:
             max_body_bytes=int(env.get("NEUROLAYER_MAX_BODY_BYTES", str(8 * 1024 * 1024))),
             session_ttl_s=int(env.get("NEUROLAYER_SESSION_TTL_S", "3600")),
             cors_origins=tuple(o.strip() for o in origins.split(",") if o.strip()),
+            demo_enabled=_flag(env, "NEUROLAYER_DEMO"),
+            inspect_timeout_s=float(env.get("NEUROLAYER_INSPECT_TIMEOUT_S", "30")),
         )

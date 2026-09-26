@@ -1,5 +1,5 @@
 # Single entry point for common tasks (WSL2/Linux, macOS, CI).
-.PHONY: setup setup-ml demo-model lock check lint format typecheck layers test cov smoke guard api web web-check clean
+.PHONY: setup setup-ml demo-model lock check lint format typecheck layers test cov smoke guard api web web-check e2e clean
 
 UV ?= uv
 
@@ -45,13 +45,16 @@ demo-model:       ## Train the synthetic demo bundle used by the local API and d
 	$(UV) run neurolayer train configs/experiments/models/nl_synthetic_demo.yaml --version 0.1.0
 
 api:              ## Local API (auth disabled: development only)
-	NEUROLAYER_API_DOCS=1 NEUROLAYER_AUTH_DISABLED=1 $(UV) run uvicorn neurolayer_api.app:app --reload --port 8000
+	NEUROLAYER_API_DOCS=1 NEUROLAYER_AUTH_DISABLED=1 NEUROLAYER_DEMO=1 $(UV) run uvicorn neurolayer_api.app:app --reload --port 8000
 
 web:
 	cd apps/web && npm install && npm run dev
 
 web-check:
 	cd apps/web && npm ci && npm run lint && npm run typecheck && npm run build
+
+e2e:              ## Browser end-to-end test (needs `make demo-model`; set PW_CHROMIUM_PATH to reuse a local Chromium)
+	cd apps/web && npm run e2e
 
 clean:
 	rm -rf .pytest_cache .mypy_cache .ruff_cache .hypothesis .coverage htmlcov dist build

@@ -26,6 +26,11 @@ api = [
     "uvicorn[standard]>=0.30",
 ]
 devices = ["brainflow>=5.12", "pylsl>=1.16"]
+# Upload inspection in the API image (EDF/BDF parsing in the sandboxed worker).
+inspect = ["mne>=1.8"]
+llm = [
+    "anthropic>=1.0",
+]
 
 [project.scripts]
 neurolayer = "neurolayer.cli:main"
@@ -100,7 +105,7 @@ plugins = ["pydantic.mypy"]
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
-module = ["sklearn.*", "scipy.*", "mne.*", "mne_bids.*", "moabb.*", "pyriemann.*", "braindecode.*", "mlflow.*", "brainflow.*", "pylsl.*"]
+module = ["sklearn.*", "scipy.*", "mne.*", "mne_bids.*", "moabb.*", "pyriemann.*", "braindecode.*", "mlflow.*", "brainflow.*", "pylsl.*", "pynput.*", "anthropic.*"]
 ignore_missing_imports = true
 
 # ---------------------------------------------------------------- pytest
@@ -136,7 +141,7 @@ name = "Core pipeline layering"
 type = "layers"
 layers = [
   "neurolayer.cli",
-  "neurolayer.experiments",
+  "neurolayer.devices | neurolayer.experiments",
   "neurolayer.tracking",
   "neurolayer.evaluation | neurolayer.models",
   "neurolayer.representation",

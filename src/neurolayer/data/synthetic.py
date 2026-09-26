@@ -23,6 +23,7 @@ Generative model (per subject)
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -264,17 +265,28 @@ def generate_synthetic_mi(config: SyntheticMIConfig | None = None) -> SyntheticM
 
 
 def generate_synthetic_recordings(
-    config: SyntheticMIConfig | None = None, rest_seconds: float = 1.5
+    config: SyntheticMIConfig | None = None,
+    rest_seconds: float = 1.5,
+    cue_labels: Sequence[str] | None = None,
 ) -> list[Recording]:
     """Generate continuous recordings (one per subject and session) with cue events.
 
     Each trial is ``rest_seconds`` of rest (no desynchronization) followed by
     ``trial_seconds`` of imagery; the event marks the cue at the start of the imagery
     segment. Used to test ingestion, QA and epoching without downloads.
+
+    ``cue_labels`` fixes the trial sequence (instead of a balanced shuffle), so a
+    simulated headset can "imagine" exactly what a cue schedule asks for.
     """
     cfg = config or SyntheticMIConfig()
     if rest_seconds <= 0:
         raise ValueError("rest_seconds must be > 0")
+    fixed = None
+    if cue_labels is not None:
+        unknown = sorted(set(cue_labels) - set(CAP1_LABELS))
+        if unknown or not cue_labels:
+            raise ValueError(f"cue_labels must be non-empty and within {CAP1_LABELS}: {unknown}")
+        fixed = np.array([CAP1_LABELS.index(label) for label in cue_labels], dtype=np.int64)
     n_trial = round(cfg.sfreq * cfg.trial_seconds)
     n_rest = round(cfg.sfreq * rest_seconds)
     site_patterns, efficiencies = _prepare(cfg)
@@ -283,9 +295,8 @@ def generate_synthetic_recordings(
         rng = np.random.default_rng([cfg.seed, s])
         model = _subject_model(cfg, rng, site_patterns, float(efficiencies[s]))
         for session in range(cfg.n_sessions):
-            labels = rng.permutation(
-                np.repeat(np.arange(2, dtype=np.int64), cfg.n_trials_per_class)
-            )
+            balanced = np.repeat(np.arange(2, dtype=np.int64), cfg.n_trials_per_class)
+            labels = fixed if fixed is not None else rng.permutation(balanced)
             gain = 1.0 + 0.05 * rng.standard_normal(len(cfg.channels))
             rest_labels = np.full(len(labels), -1, dtype=np.int64)
             rest = _render(cfg, rng, model, _amplitudes(cfg, rng, rest_labels, 0.0), n_rest, gain)

@@ -11,6 +11,10 @@ development):
 * ``POST /v1/sessions/{id}/decode``: batch decoding with class probabilities.
 * ``WS   /v1/sessions/{id}/stream``: first message ``{"type": "auth", "token": ...}``,
   then ``{"type": "trial", "data": [[...]]}`` messages, each answered with a prediction.
+* ``POST /v1/recordings/inspect``: summarize an uploaded EDF/BDF file, parsed in a
+  resource-limited subprocess (``neurolayer_api.inspect_worker``).
+* ``GET  /v1/demo/trials``: synthetic trials for the dashboard calibration game (only
+  when ``NEUROLAYER_DEMO=1``).
 
 Security posture: per-tenant session isolation, token-bucket rate limiting, request size
 limit, strict response headers, CORS allowlist, no neural data in logs.
@@ -21,17 +25,24 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import subprocess
+import sys
+import tempfile
 import time
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import Annotated, Any, Literal
 
 import numpy as np
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, WebSocket
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 from starlette.websockets import WebSocketDisconnect
 
 from neurolayer import __version__
+from neurolayer.data.synthetic import SyntheticMIConfig, generate_synthetic_mi
+from neurolayer.models.bundle import BundleInfo
 from neurolayer_api.inference import PayloadError, canonical_channels, to_epochs
 from neurolayer_api.models import LoadedModel, ModelRegistry
 from neurolayer_api.security import AuthError, Principal, RateLimiter, bearer, principal_from_token
@@ -89,6 +100,7 @@ class ModelInfo(BaseModel):
     labels: list[str]
     sfreq: float
     trial_seconds: float
+    window_offset_s: float = Field(description="Trial window start, seconds after the cue.")
     trained_channels: list[str]
     synthetic_only: bool
 
@@ -146,6 +158,50 @@ class DecodeResponse(BaseModel):
     latency_ms: float
 
 
+class DemoTrials(BaseModel):
+    """Synthetic trials (microvolts) standing in for a headset in the dashboard demo."""
+
+    synthetic: Literal[True] = True
+    ch_names: list[str]
+    sfreq: float
+    trial_seconds: float
+    trials: list[Trial]
+
+
+class InspectChannel(BaseModel):
+    """Per-channel summary of an uploaded recording (band power in dB re 1 µV²/Hz)."""
+
+    name: str
+    canonical: str | None
+    mu_db: float | None
+    beta_db: float | None
+    flat: bool
+    noisy: bool
+
+
+class InspectPreview(BaseModel):
+    """Downsampled first seconds of up to eight channels, microvolts."""
+
+    sfreq: float
+    channels: list[str]
+    data_uv: list[list[float]]
+
+
+class InspectReport(BaseModel):
+    """Summary of an uploaded recording (returned to the uploader only; never stored)."""
+
+    format: Literal["edf", "bdf"]
+    sfreq: float
+    duration_s: float
+    n_channels: int
+    channels: list[InspectChannel]
+    annotations: dict[str, int]
+    line_noise_ratio: dict[str, float | None]
+    median_abs_amplitude_uv: float
+    issues: list[str]
+    preview: InspectPreview
+
+
 CAPABILITIES = [
     CapabilityStatus(
         id="CAP-1", name="Calibration-efficient motor intent", status="in_development"
@@ -156,6 +212,51 @@ CAPABILITIES = [
 
 
 # ----------------------------------------------------------------------------- helpers
+def _window_offset(info: BundleInfo) -> float:
+    pipeline = info.preprocessing.get("pipeline") or {}
+    return float(pipeline.get("epoching", {}).get("tmin", 0.5)) if pipeline else 0.0
+
+
+def _sniff_format(head: bytes) -> Literal["edf", "bdf"]:
+    if head[:8] == b"\xffBIOSEMI":
+        return "bdf"
+    if head[:8] == b"0       ":
+        return "edf"
+    raise HTTPException(415, "only EDF/EDF+ and BDF files are accepted")
+
+
+def _run_inspect_worker(content: bytes, file_format: str, timeout_s: float) -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix="nl-inspect-") as tmp:
+        path = Path(tmp) / f"upload.{file_format}"
+        path.write_bytes(content)
+        try:
+            done = subprocess.run(  # noqa: S603  (fixed argv, no shell)
+                [sys.executable, "-m", "neurolayer_api.inspect_worker", str(path), file_format],
+                capture_output=True,
+                timeout=timeout_s,
+                check=False,
+                env={
+                    "PATH": "/usr/bin:/bin",
+                    "MNE_DONTWRITE_HOME": "true",
+                    "OMP_NUM_THREADS": "1",
+                    "OPENBLAS_NUM_THREADS": "1",
+                    "MKL_NUM_THREADS": "1",
+                    "HOME": tmp,
+                },
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise HTTPException(422, "the file took too long to parse") from exc
+    try:
+        payload: dict[str, Any] = json.loads(done.stdout.decode() or "{}")
+    except json.JSONDecodeError:
+        payload = {}
+    if done.returncode == 4:
+        raise HTTPException(501, payload.get("error", "file inspection is not installed"))
+    if done.returncode != 0 or "error" in payload or not payload:
+        raise HTTPException(422, payload.get("error", "could not read the file"))
+    return payload
+
+
 def _session_info(session: Session, model: LoadedModel) -> SessionInfo:
     return SessionInfo(
         id=session.id,
@@ -291,6 +392,7 @@ def create_app(settings: Settings | None = None, *, enable_docs: bool | None = N
                 labels=list(i.label_names),
                 sfreq=i.sfreq,
                 trial_seconds=i.n_times / i.sfreq,
+                window_offset_s=_window_offset(i),
                 trained_channels=list(i.trained_channels),
                 synthetic_only=bool(i.preprocessing.get("synthetic_only", False)),
             )
@@ -369,6 +471,56 @@ def create_app(settings: Settings | None = None, *, enable_docs: bool | None = N
             raise HTTPException(422, str(exc)) from exc
         return DecodeResponse(
             predictions=predictions, latency_ms=round((time.perf_counter() - started) * 1000, 3)
+        )
+
+    @app.post("/v1/recordings/inspect", response_model=InspectReport, tags=["recordings"])
+    async def inspect_recording(request: Request, who: Caller) -> InspectReport:
+        # Stream with a hard cap: chunked uploads carry no Content-Length for the middleware.
+        chunks, size = [], 0
+        async for chunk in request.stream():
+            size += len(chunk)
+            if size > settings.max_body_bytes:
+                raise HTTPException(413, "request body too large")
+            chunks.append(chunk)
+        content = b"".join(chunks)
+        file_format = _sniff_format(content[:8])
+        # The worker blocks for up to the timeout: keep it off the event loop.
+        report = await run_in_threadpool(
+            _run_inspect_worker, content, file_format, settings.inspect_timeout_s
+        )
+        return InspectReport.model_validate(report)
+
+    @app.get("/v1/demo/trials", response_model=DemoTrials, tags=["demo"])
+    def demo_trials(
+        who: Caller,
+        model: str,
+        n_per_class: Annotated[int, Query(ge=1, le=60)] = 30,
+        seed: Annotated[int, Query(ge=0, le=10_000)] = 0,
+    ) -> DemoTrials:
+        if not settings.demo_enabled:
+            raise HTTPException(404, "demo data is disabled (set NEUROLAYER_DEMO=1)")
+        info = model_or_404(model).info
+        config = SyntheticMIConfig(
+            n_subjects=1,
+            n_trials_per_class=n_per_class,
+            sfreq=info.sfreq,
+            trial_seconds=info.n_times / info.sfreq,
+            channels=info.trained_channels,
+            signal_to_noise=0.5,
+            efficiencies=(0.8,),
+            seed=100_000 + seed,  # never one of the training seeds
+            dataset_id="demo",
+        )
+        epochs = generate_synthetic_mi(config).epochs
+        trials = [
+            Trial(data=np.round(x / 1e-6, 3).tolist(), label=epochs.label_names[int(y)])
+            for x, y in zip(epochs.X, epochs.y, strict=True)
+        ]
+        return DemoTrials(
+            ch_names=list(epochs.ch_names),
+            sfreq=epochs.sfreq,
+            trial_seconds=info.n_times / info.sfreq,
+            trials=trials,
         )
 
     @app.websocket("/v1/sessions/{session_id}/stream")

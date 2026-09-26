@@ -9,6 +9,7 @@ services:
     environment:
       NEUROLAYER_API_DOCS: "1"
       NEUROLAYER_AUTH_DISABLED: "1"   # local development only
+      NEUROLAYER_DEMO: "1"            # synthetic demo trials for the dashboard game
       NEUROLAYER_CORS_ORIGINS: "http://localhost:3000"
     volumes:
       - ../artifacts/models:/models:ro
