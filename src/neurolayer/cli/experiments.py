@@ -11,6 +11,7 @@ from typing import Any
 from neurolayer.data.catalog import LicenseGateError
 from neurolayer.experiments.config import load_experiment_config
 from neurolayer.experiments.runner import DirtyTreeError, ExperimentOutcome, run_experiment
+from neurolayer.experiments.training import train_bundle
 
 SMOKE_CONFIG = Path("configs/experiments/smoke_synthetic.yaml")
 
@@ -66,8 +67,28 @@ def _smoke(args: argparse.Namespace) -> int:
     return _run_config(args, SMOKE_CONFIG)
 
 
+def _train(args: argparse.Namespace) -> int:
+    config = load_experiment_config(args.config)
+    try:
+        info = train_bundle(
+            config,
+            catalog_dir=args.catalog,
+            data_root=args.data_root,
+            repo_root=Path.cwd(),
+            out_dir=args.models_dir,
+            version=args.version,
+        )
+    except (LicenseGateError, ValueError, FileExistsError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(f"bundle:  {info.model_id}")
+    print(f"weights: sha256 {info.weights_sha256}")
+    print(f"written: {args.models_dir / info.name / info.version}")
+    return 0
+
+
 def register(commands: Any) -> None:
-    """Register ``run`` and ``smoke``."""
+    """Register ``run``, ``smoke`` and ``train``."""
     run = commands.add_parser("run", help="run an experiment config")
     run.add_argument("config", type=Path)
     run.add_argument("--official", action="store_true", help="require a clean git tree")
@@ -76,3 +97,8 @@ def register(commands: Any) -> None:
     run.set_defaults(handler=_run)
     smoke = commands.add_parser("smoke", help="run the synthetic end-to-end smoke experiment")
     smoke.set_defaults(handler=_smoke)
+    train = commands.add_parser("train", help="fit the proprietary model and export a bundle")
+    train.add_argument("config", type=Path)
+    train.add_argument("--version", required=True, help="bundle version, e.g. 0.1.0")
+    train.add_argument("--models-dir", type=Path, default=Path("artifacts/models"))
+    train.set_defaults(handler=_train)

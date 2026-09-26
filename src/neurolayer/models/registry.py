@@ -37,6 +37,7 @@ _REGISTRY: dict[str, str] = {
     "ts_lr_subject": "neurolayer.models.baselines:PerSubjectTangentSpaceLR",
     "ts_lr_pooled": "neurolayer.models.baselines:PooledRiemannianDecoder",
     "braindecode": "neurolayer.models.deep:BraindecodeDecoder",
+    "nl_spatial_field": "neurolayer.models.proprietary:SpatialFieldDecoder",
 }
 
 BASELINES: dict[str, tuple[str, dict[str, Any]]] = {

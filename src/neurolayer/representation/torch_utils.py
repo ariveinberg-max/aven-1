@@ -66,9 +66,10 @@ def select_device(preference: str = "auto") -> Any:
     return torch.device("cpu")
 
 
-def _split(
+def grouped_split(
     y: npt.NDArray[np.int64], groups: npt.NDArray[Any] | None, fraction: float, seed: int
 ) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]]:
+    """Train/validation indices; whole groups (subjects) go to validation when possible."""
     rng = np.random.default_rng(seed)
     n = len(y)
     if groups is not None and len(np.unique(groups)) >= 3:
@@ -108,7 +109,7 @@ def train_classifier(
     kwargs = dict(forward_kwargs or {})
     seed_everything(cfg.seed)
     model.to(device)
-    train_idx, val_idx = _split(y, groups, cfg.val_fraction, cfg.seed)
+    train_idx, val_idx = grouped_split(y, groups, cfg.val_fraction, cfg.seed)
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
     loss_fn = torch.nn.CrossEntropyLoss()
     # np.array(...) copies: EpochSet arrays are read-only and torch refuses to share them.

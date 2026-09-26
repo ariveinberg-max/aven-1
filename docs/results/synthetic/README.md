@@ -36,3 +36,23 @@ uv run neurolayer report compare artifacts/runs/synthetic-suite/*-b?-r2-* \
 ## Artifacts not in git
 
 The run directories (`artifacts/runs/...`) are git-ignored. The run ids in the reports identify them on the machine that produced them.
+
+## Stage 5: proprietary spatial-field decoder v0 vs baselines (synthetic)
+
+| Regime | Report | Curves |
+|--------|--------|--------|
+| R1 | [stage5-r1.md](stage5-r1.md) | [stage5-cec-r1.svg](stage5-cec-r1.svg) |
+| R2 | [stage5-r2.md](stage5-r2.md) | [stage5-cec-r2.svg](stage5-cec-r2.svg) |
+| R3 | [stage5-r3.md](stage5-r3.md) | [stage5-cec-r3.svg](stage5-cec-r3.svg) |
+
+Paired against B3 (the strongest baseline), Holm-corrected:
+
+- **R3 (3-channel target):** +10 to +12 pp at every budget, all p < 0.004. The decoder runs on the new montage without retraining, because its spatial filters are functions of scalp position.
+- **R2 (new lab):** +6 pp at k=0 (p = 0.009), +5 pp at k=5 (p = 0.005); not significant at larger budgets.
+- **R1:** +4 pp at k=5 and 10 (p < 0.05); not significant at k=0.
+
+Hypotheses H1–H4 are in `docs/experiments/EXP-20260926-*` (H1 refuted; H2, H3 and H4 supported).
+
+**Caveat (important):** the synthetic generator defines each subject's sources by electrode position and applies subject differences as linear mixing changes. Both favor a position-defined, alignment-based model. These results justify taking the design to real data. They are **not** evidence of CAP-1.
+
+**Leakage control for the proprietary model** (`neurolayer control configs/experiments/stage5/nl_r2.yaml --seeds 5`, ADR-0010): the across-seed mean BA is 0.497–0.522 at every k. **PASS**, so the model does not exploit a leakage path.

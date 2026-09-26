@@ -223,6 +223,13 @@ Legend: ✅ done · 🔜 next · ⏳ blocked by dependency · 👤 human task
 
 ## Stage 5: Proprietary model (Gate 2)
 
+**Status:** v0 built and studied on synthetic data ✅ · ⏳ real-data evaluation (needs Stage 1 data + WP-1.1).
+
+- **Model:** `nl_spatial_field` (`neurolayer.models.proprietary.SpatialFieldDecoder`, network in `neurolayer.representation.spatial_field`). Spatial filters are a learned function of **scalp position**, so it runs on any montage with known electrode positions. It adds per-subject Euclidean alignment, channel-dropout training, head fine-tuning on calibration, and optional causal online alignment.
+- **Synthetic results** (`docs/results/synthetic/stage5-*.md`), paired vs B3: +10–12 pp at every budget on R3 and +5–6 pp at k ≤ 5 on R2. Multi-seed shuffle control passes.
+- **Hypotheses:** H1 refuted, H2/H3/H4 supported (`docs/experiments/EXP-20260926-*`).
+- **Packaging:** `neurolayer train CONFIG --version X` exports a hash-pinned bundle and enforces the *training* license gate.
+
 This stage is a research program run as experiment cards (`docs/experiments/`), not a single WP. Initial hypotheses to test, in order:
 
 - **H1:** montage-agnostic encoding (channels as tokens with learned 10-05 position embeddings) + masked-signal pretraining on **license-clean** data beats B3–B6 on R2/R3 at k=0 (U).
