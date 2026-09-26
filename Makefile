@@ -1,11 +1,14 @@
 # Single entry point for common tasks (WSL2/Linux, macOS, CI).
-.PHONY: setup lock check lint format typecheck layers test cov smoke guard api web web-check clean
+.PHONY: setup setup-ml lock check lint format typecheck layers test cov smoke guard api web web-check clean
 
 UV ?= uv
 
 setup:            ## Install core + dev + api deps and git hooks
 	$(UV) sync --extra api
 	$(UV) run pre-commit install
+
+setup-ml:         ## Full ML stack (MNE, MOABB, PyTorch, MLflow): use on the GPU PC
+	$(UV) sync --extra api --extra neuro --extra dl --extra tracking
 
 lock:             ## Re-resolve uv.lock after dependency changes
 	$(UV) lock

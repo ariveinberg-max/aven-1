@@ -58,7 +58,8 @@ Legend: ✅ done · 🔜 next · ⏳ blocked by dependency · 👤 human task
 - **Start with:** `physionet_mi`, `cho2017`, `lee2019_mi`, `stieger2021`, `dreyer2023`, `bnci2014_001`.
 - **Accept when:** `neurolayer catalog check --purpose benchmark --datasets physionet_mi,cho2017,lee2019_mi` exits 0, or any dataset still refused has a documented reason.
 
-### WP-1.2: MOABB/MNE adapter → `Recording` (PhysioNet MI first)
+### WP-1.2: MOABB/MNE adapter → `Recording` (PhysioNet MI first) ✅
+- **Done:** `neurolayer.data.adapters` (protocol, `get_adapter`, `MoabbAdapter`) and `neurolayer.data.mne_bridge`. Tested with an in-memory MOABB double; the PhysioNet download test is opt-in (`pytest -m network`).
 - **Scope:**
   - `neurolayer.data.adapters.moabb.MoabbAdapter(card)`, which implements a `DatasetAdapter` protocol (defined in `neurolayer.data.adapters.base`):
     - `subjects() -> list[str]`
@@ -74,7 +75,8 @@ Legend: ✅ done · 🔜 next · ⏳ blocked by dependency · 👤 human task
   - a `network`-marked test loading PhysioNet subject 1
 - **Accept when:** `load_epochs(["physionet_mi"])` works end to end, after WP-2.4 exists. Until then, the adapter yields valid `Recording` objects for subjects 1–3.
 
-### WP-1.3: Raw storage, checksums, DVC
+### WP-1.3: Raw storage, checksums, DVC ✅
+- **Done:** `neurolayer.data.storage` (layout, SHA-256 manifests, BIDS-EDF round trip) and `neurolayer data fetch|verify`. DVC is initialized; run `uvx dvc add data/raw/<id>/<version>` after each fetch.
 - **Scope:**
   - `neurolayer data fetch <dataset_id>` downloads into `data/raw/<id>/<version>/`
   - writes `checksums.sha256`
@@ -84,7 +86,8 @@ Legend: ✅ done · 🔜 next · ⏳ blocked by dependency · 👤 human task
 - **Tests:** checksum verification detects a modified file; BIDS round trip of a synthetic `Recording`.
 - **Accept when:** re-running fetch is a no-op when checksums match.
 
-### WP-1.4: Channel and label audit; choose the locked holdout
+### WP-1.4: Channel and label audit; choose the locked holdout ✅ tooling · ⏳ decision
+- **Done:** `neurolayer.data.audit` and `neurolayer data audit`. The selection rule is ADR-0009. The **choice** waits for downloaded data ([dataset-audit.md](../results/dataset-audit.md)).
 - **Scope:** a notebook plus script producing `docs/results/dataset-audit.md`. For each motor-imagery dataset it reports:
   - channels vs canonical, and coverage of each `CONSUMER_MONTAGES` entry
   - trials per class per subject, sessions, sampling rate
@@ -92,7 +95,8 @@ Legend: ✅ done · 🔜 next · ⏳ blocked by dependency · 👤 human task
 - **Decide:** the development pool vs the **locked holdout** (Dreyer2023 or Stieger2021), based on channel coverage and size. Record the decision in ADR-0009.
 - **Accept when:** the ADR is merged and card `roles` are updated.
 
-### WP-1.5: Dataset QA report
+### WP-1.5: Dataset QA report ✅
+- **Done:** `neurolayer.data.qa` (flat, noisy, line noise, unit sanity, dropped labels and channels) and `neurolayer data qa [--strict]`.
 - **Scope:** per-subject QA metrics:
   - duration
   - flat or noisy channels (robust z-score of variance)

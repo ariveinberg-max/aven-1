@@ -28,7 +28,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from neurolayer.core.labels import CAP1_LABELS
-from neurolayer.core.types import EpochSet, FloatArray
+from neurolayer.core.types import EpochSet, Event, FloatArray, IntArray, Recording
 
 _VOLTS_SCALE = 1e-5
 _DEFAULT_CHANNELS = ("FC3", "FCz", "FC4", "C3", "Cz", "C4", "CP3", "CPz", "CP4")
@@ -152,6 +152,77 @@ def _shaped_noise(
     return signal / np.maximum(std, 1e-12)
 
 
+@dataclass(frozen=True, slots=True)
+class _SubjectModel:
+    patterns: FloatArray
+    mixing: FloatArray
+    band: tuple[float, float]
+    efficiency: float
+
+
+def _subject_model(
+    cfg: SyntheticMIConfig, rng: np.random.Generator, site_patterns: FloatArray, efficiency: float
+) -> _SubjectModel:
+    shape = site_patterns.shape
+    patterns = site_patterns * (1.0 + cfg.subject_variability * rng.normal(0.0, 0.3, shape))
+    patterns += cfg.subject_variability * rng.normal(0.0, 0.1, shape)
+    n_ch = shape[0]
+    mixing = rng.normal(0.0, 1.0, (n_ch, n_ch)) / np.sqrt(n_ch)
+    mu_freq = rng.uniform(9.0, 13.0)
+    return _SubjectModel(patterns, mixing, (mu_freq - 1.5, mu_freq + 1.5), efficiency)
+
+
+def _amplitudes(
+    cfg: SyntheticMIConfig, rng: np.random.Generator, labels: IntArray, efficiency: float
+) -> FloatArray:
+    """Per-trial motor-source amplitudes; label -1 means rest (no desynchronization)."""
+    amplitude = np.full((len(labels), 2), cfg.signal_to_noise)
+    amplitude *= np.exp(0.2 * rng.standard_normal((len(labels), 2)))
+    suppression = 1.0 - cfg.erd_depth * efficiency
+    # Left-hand imagery (0) suppresses the right-hemisphere source (index 1) and
+    # right-hand imagery (1) suppresses the left-hemisphere source (index 0).
+    amplitude[labels == 0, 1] *= suppression
+    amplitude[labels == 1, 0] *= suppression
+    return amplitude
+
+
+def _render(
+    cfg: SyntheticMIConfig,
+    rng: np.random.Generator,
+    model: _SubjectModel,
+    amplitude: FloatArray,
+    n_times: int,
+    gain: FloatArray | None = None,
+) -> FloatArray:
+    """Mix sources into sensor signals, shape (n_trials, n_channels, n_times), in volts."""
+    n, n_ch = amplitude.shape[0], model.mixing.shape[0]
+    motor = _shaped_noise(rng, (n, 2, n_times), cfg.sfreq, model.band)
+    motor *= amplitude[:, :, None]
+    background = _shaped_noise(rng, (n, n_ch, n_times), cfg.sfreq, None)
+    sensor = 0.3 * rng.standard_normal((n, n_ch, n_times))
+    channel_gain: FloatArray = (
+        gain if gain is not None else np.asarray(1.0 + 0.05 * rng.standard_normal(n_ch))
+    )
+    X: FloatArray = np.einsum("cs,nst->nct", model.patterns, motor)
+    X += np.einsum("cs,nst->nct", model.mixing, background)
+    X += sensor
+    X *= channel_gain[None, :, None] * _VOLTS_SCALE
+    return X
+
+
+def _prepare(cfg: SyntheticMIConfig) -> tuple[FloatArray, FloatArray]:
+    """Site-level patterns and per-subject efficiencies."""
+    base = _motor_patterns(tuple(cfg.channels))
+    site_rng = np.random.default_rng([cfg.seed, 1_000_003])
+    site_patterns = base * (1.0 + cfg.site_shift * site_rng.normal(0.0, 0.4, base.shape))
+    if cfg.efficiencies is not None:
+        efficiencies = np.asarray(cfg.efficiencies, dtype=np.float64)
+    else:
+        prior_rng = np.random.default_rng([cfg.seed, 2_000_003])
+        efficiencies = prior_rng.beta(cfg.efficiency_alpha, cfg.efficiency_beta, cfg.n_subjects)
+    return site_patterns, efficiencies
+
+
 def generate_synthetic_mi(config: SyntheticMIConfig | None = None) -> SyntheticMIResult:
     """Generate a labeled two-class (left/right hand) motor-imagery :class:`EpochSet`.
 
@@ -159,66 +230,29 @@ def generate_synthetic_mi(config: SyntheticMIConfig | None = None) -> SyntheticM
     sessions), with class order shuffled within each session.
     """
     cfg = config or SyntheticMIConfig()
-    channels = tuple(cfg.channels)
-    n_ch = len(channels)
     n_times = round(cfg.sfreq * cfg.trial_seconds)
     n_per_session = 2 * cfg.n_trials_per_class
-    base = _motor_patterns(channels)
-
-    site_rng = np.random.default_rng([cfg.seed, 1_000_003])
-    site_patterns = base * (1.0 + cfg.site_shift * site_rng.normal(0.0, 0.4, base.shape))
-
-    if cfg.efficiencies is not None:
-        efficiencies = np.asarray(cfg.efficiencies, dtype=np.float64)
-    else:
-        prior_rng = np.random.default_rng([cfg.seed, 2_000_003])
-        efficiencies = prior_rng.beta(cfg.efficiency_alpha, cfg.efficiency_beta, cfg.n_subjects)
+    site_patterns, efficiencies = _prepare(cfg)
 
     parts: list[EpochSet] = []
     truth: dict[str, float] = {}
     for s in range(cfg.n_subjects):
         rng = np.random.default_rng([cfg.seed, s])
         subject = f"sub-{s:03d}"
-        efficiency = float(efficiencies[s])
-        truth[subject] = efficiency
-
-        patterns = site_patterns * (
-            1.0 + cfg.subject_variability * rng.normal(0.0, 0.3, base.shape)
-        )
-        patterns += cfg.subject_variability * rng.normal(0.0, 0.1, base.shape)
-        background_mixing = rng.normal(0.0, 1.0, (n_ch, n_ch)) / np.sqrt(n_ch)
-        mu_freq = rng.uniform(9.0, 13.0)
-        band = (mu_freq - 1.5, mu_freq + 1.5)
-
+        truth[subject] = float(efficiencies[s])
+        model = _subject_model(cfg, rng, site_patterns, truth[subject])
         for session in range(cfg.n_sessions):
             labels = rng.permutation(
                 np.repeat(np.arange(2, dtype=np.int64), cfg.n_trials_per_class)
             )
-            amplitude = np.full((n_per_session, 2), cfg.signal_to_noise)
-            amplitude *= np.exp(0.2 * rng.standard_normal((n_per_session, 2)))
-            suppression = 1.0 - cfg.erd_depth * efficiency
-            # Left-hand imagery (0) suppresses the right-hemisphere source (index 1) and
-            # right-hand imagery (1) suppresses the left-hemisphere source (index 0).
-            amplitude[labels == 0, 1] *= suppression
-            amplitude[labels == 1, 0] *= suppression
-
-            motor = _shaped_noise(rng, (n_per_session, 2, n_times), cfg.sfreq, band)
-            motor *= amplitude[:, :, None]
-            background = _shaped_noise(rng, (n_per_session, n_ch, n_times), cfg.sfreq, None)
-            sensor = 0.3 * rng.standard_normal((n_per_session, n_ch, n_times))
-            gain = 1.0 + 0.05 * rng.standard_normal(n_ch)
-
-            X = np.einsum("cs,nst->nct", patterns, motor)
-            X += np.einsum("cs,nst->nct", background_mixing, background)
-            X += sensor
-            X *= gain[None, :, None] * _VOLTS_SCALE
-
+            amplitude = _amplitudes(cfg, rng, labels, model.efficiency)
+            X = _render(cfg, rng, model, amplitude, n_times)
             parts.append(
                 EpochSet.from_arrays(
                     X,
                     labels,
                     label_names=CAP1_LABELS,
-                    ch_names=channels,
+                    ch_names=tuple(cfg.channels),
                     sfreq=cfg.sfreq,
                     subject=subject,
                     session=f"ses-{session:02d}",
@@ -227,3 +261,54 @@ def generate_synthetic_mi(config: SyntheticMIConfig | None = None) -> SyntheticM
                 )
             )
     return SyntheticMIResult(epochs=EpochSet.concat(parts), efficiency=truth)
+
+
+def generate_synthetic_recordings(
+    config: SyntheticMIConfig | None = None, rest_seconds: float = 1.5
+) -> list[Recording]:
+    """Generate continuous recordings (one per subject and session) with cue events.
+
+    Each trial is ``rest_seconds`` of rest (no desynchronization) followed by
+    ``trial_seconds`` of imagery; the event marks the cue at the start of the imagery
+    segment. Used to test ingestion, QA and epoching without downloads.
+    """
+    cfg = config or SyntheticMIConfig()
+    if rest_seconds <= 0:
+        raise ValueError("rest_seconds must be > 0")
+    n_trial = round(cfg.sfreq * cfg.trial_seconds)
+    n_rest = round(cfg.sfreq * rest_seconds)
+    site_patterns, efficiencies = _prepare(cfg)
+    recordings: list[Recording] = []
+    for s in range(cfg.n_subjects):
+        rng = np.random.default_rng([cfg.seed, s])
+        model = _subject_model(cfg, rng, site_patterns, float(efficiencies[s]))
+        for session in range(cfg.n_sessions):
+            labels = rng.permutation(
+                np.repeat(np.arange(2, dtype=np.int64), cfg.n_trials_per_class)
+            )
+            gain = 1.0 + 0.05 * rng.standard_normal(len(cfg.channels))
+            rest_labels = np.full(len(labels), -1, dtype=np.int64)
+            rest = _render(cfg, rng, model, _amplitudes(cfg, rng, rest_labels, 0.0), n_rest, gain)
+            trials = _render(
+                cfg, rng, model, _amplitudes(cfg, rng, labels, model.efficiency), n_trial, gain
+            )
+            segments = np.concatenate([rest, trials], axis=2)  # (n, ch, rest + trial)
+            data = np.ascontiguousarray(np.moveaxis(segments, 0, 1).reshape(len(cfg.channels), -1))
+            period = n_rest + n_trial
+            events = tuple(
+                Event(onset_sample=i * period + n_rest, label=CAP1_LABELS[int(label)])
+                for i, label in enumerate(labels)
+            )
+            recordings.append(
+                Recording(
+                    data=data,
+                    sfreq=cfg.sfreq,
+                    ch_names=tuple(cfg.channels),
+                    dataset_id=cfg.dataset_id,
+                    subject_id=f"sub-{s:03d}",
+                    session_id=f"ses-{session:02d}",
+                    run_id="0",
+                    events=events,
+                )
+            )
+    return recordings

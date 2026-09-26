@@ -38,6 +38,7 @@ def run_experiment(
     catalog_dir: Path,
     output_dir: Path,
     repo_root: Path,
+    data_root: Path = Path("data"),
     official: bool = False,
     mlflow: bool = False,
     mlflow_uri: str | None = None,

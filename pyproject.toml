@@ -102,7 +102,7 @@ ignore_missing_imports = true
 # ---------------------------------------------------------------- pytest
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = ["-ra", "--strict-markers", "--strict-config"]
+addopts = ["-ra", "--strict-markers", "--strict-config", "-m", "not network and not gpu"]
 markers = [
   "slow: long-running tests (deselect with '-m \"not slow\"')",
   "network: requires internet access; opt-in only",
