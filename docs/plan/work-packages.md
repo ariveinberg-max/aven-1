@@ -111,12 +111,14 @@ Legend: ✅ done · 🔜 next · ⏳ blocked by dependency · 👤 human task
 
 ## Stage 2: Signal processing
 
-### WP-2.1: Transform framework
+### WP-2.1: Transform framework ✅
+- **Done:** `neurolayer.signal.transforms` (`Transform` protocol, registry, `TransformSpec`) and `neurolayer.signal.pipeline` (`PipelineSpec`, `pipeline_hash`).
 - **Scope:** a `Transform` protocol (`__call__(Recording) -> Recording`, `name`, `version`, `config`) and a `Pipeline` (ordered transforms). `pipeline_hash` = SHA-256 of the canonical JSON of the `(name, version, config)` list.
 - **Contracts:** transforms are pure. They never mutate their input, which is guaranteed because arrays are read-only.
 - **Tests:** the hash is stable across runs and changes when any version or config changes.
 
-### WP-2.2: Standard transforms
+### WP-2.2: Standard transforms ✅
+- **Done:** `Bandpass` (zero-phase Butterworth; tested for ≥ 30 dB stopband and zero lag), `Notch`, `Resample` (polyphase, event rescaling), `Rereference`, `UnitCheck`. **Deviation:** IIR (Butterworth SOS) rather than FIR, which is cheaper and zero-phase via forward-backward filtering. A FIR option is a follow-up if Gate 0 needs it.
 - **Scope:**
   - resample (polyphase)
   - bandpass/highpass (zero-phase FIR, parameters in config)
@@ -125,11 +127,13 @@ Legend: ✅ done · 🔜 next · ⏳ blocked by dependency · 👤 human task
   - unit sanity check (flags data that looks like µV mislabeled as V)
 - **Tests:** golden tests on synthetic sinusoids (the passband is preserved, the stopband is attenuated by at least the spec), plus determinism.
 
-### WP-2.3: Channel harmonization
+### WP-2.3: Channel harmonization ✅
+- **Done:** `SelectChannels` (explicit list or montage, never substitutes) and `channels: common` harmonization in `neurolayer.signal.build`.
 - **Scope:** select or reorder to a target channel list, driven by config. Optional interpolation is **off by default** and, when used, must be recorded in the manifest. Montage restriction for R3 uses `CONSUMER_MONTAGES`.
 - **Tests:** a missing channel raises `MissingChannelsError`, never substitutes silently.
 
-### WP-2.4: Epoching and label harmonization
+### WP-2.4: Epoching and label harmonization ✅
+- **Done:** `neurolayer.signal.epoching` (cue-relative window, label filter, baseline, chronological `order`, `EpochingReport`).
 - **Scope:** `Recording(s) -> EpochSet`:
   - window relative to the cue (config, for example 0.5–2.5 s)
   - label filter (for example CAP-1 L/R)
@@ -137,11 +141,13 @@ Legend: ✅ done · 🔜 next · ⏳ blocked by dependency · 👤 human task
   - optional baseline correction
 - **Tests:** synthetic `Recording` with known events → exact epoch count, label and order.
 
-### WP-2.5: Artifact handling
+### WP-2.5: Artifact handling ✅ (partial)
+- **Done:** peak-to-peak and flat epoch rejection with counts; bad channels are flagged by the QA report (WP-1.5). **Deferred:** EOG regression. Adapters currently keep EEG channels only; a follow-up must carry EOG through `Recording` first.
 - **Scope:** bad-channel detection, amplitude/variance epoch rejection (thresholds in config, report counts), and optional EOG regression when EOG is available. Every rejection is counted in the QA output.
 - **Tests:** injected artifacts are rejected; clean epochs are kept.
 
-### WP-2.6: Processed cache + Gate 0
+### WP-2.6: Processed cache + Gate 0 ✅ cache · Gate 0 tooling in Stage 4 · ⏳ Gate 0 run needs data
+- **Done:** content-addressed per-subject cache (`save_epochs`/`load_epochs_file`, pickle-free) used by `build_epochs`. Experiment configs now carry `pipeline` and `max_subjects`, and manifests record `pipeline_hash` (manifest v2).
 - **Scope:** write and read `data/processed/<pipeline_hash>/<dataset>/sub-XXX_epochs.npz` + `.json`. Then reproduce MOABB within-session CSP+LDA and TS+LR on PhysioNet, Cho2017 and Lee2019 with the same pipeline.
 - **Accept when (Gate 0):** mean accuracy within ±3 pp of MOABB's published numbers. Results are recorded in the results ledger with official run ids.
 

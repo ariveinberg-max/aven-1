@@ -10,10 +10,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from neurolayer.data.catalog import load_catalog, require_usage, select_cards
-from neurolayer.data.sources import load_epochs
 from neurolayer.evaluation.protocol import ProtocolResult, run_protocol
 from neurolayer.experiments.config import ExperimentConfig
 from neurolayer.models.registry import make_factory
+from neurolayer.signal.build import build_epochs
 from neurolayer.tracking.manifest import RunManifest, create_manifest, git_state, write_run
 from neurolayer.tracking.mlflow_logger import log_run
 
@@ -57,7 +57,8 @@ def run_experiment(
     With ``mlflow=True`` the finished run is mirrored to MLflow (WP-0.7). An MLflow
     failure only logs a warning; the on-disk run directory is the source of truth.
     """
-    cards = select_cards(load_catalog(catalog_dir), config.datasets)
+    catalog = load_catalog(catalog_dir)
+    cards = select_cards(catalog, config.datasets)
     require_usage(cards, config.purpose)
 
     if official:
@@ -67,7 +68,14 @@ def run_experiment(
                 "official runs require a clean, committed git tree; commit or stash changes"
             )
 
-    epochs = load_epochs(config.datasets, config.synthetic.to_generator_config())
+    epochs, build_report = build_epochs(
+        config.datasets,
+        catalog=catalog,
+        data_root=data_root,
+        pipeline=config.pipeline,
+        synthetic=config.synthetic.to_generator_config(),
+        max_subjects=config.max_subjects,
+    )
     protocol_config = config.protocol.to_protocol_config()
     result = run_protocol(
         epochs, make_factory(config.decoder.name, config.decoder.params), protocol_config
@@ -81,6 +89,13 @@ def run_experiment(
         seed=protocol_config.seed,
         official=official,
         repo_root=repo_root,
+        pipeline_hash=build_report.pipeline_hash,
+        data_report={
+            "cache_hits": build_report.cache_hits,
+            "cache_misses": build_report.cache_misses,
+            "dropped_channels": list(build_report.dropped_channels),
+            "epoching": build_report.epoching,
+        },
     )
     run_dir = write_run(output_dir, manifest, result)
     mlflow_run_id = log_run(manifest, result, run_dir, tracking_uri=mlflow_uri) if mlflow else None

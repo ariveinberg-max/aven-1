@@ -16,6 +16,7 @@ from neurolayer.core.channels import CONSUMER_MONTAGES
 from neurolayer.data.catalog import Purpose
 from neurolayer.data.synthetic import SyntheticMIConfig
 from neurolayer.evaluation.protocol import ProtocolConfig
+from neurolayer.signal.pipeline import PipelineSpec
 
 
 class _Strict(BaseModel):
@@ -87,6 +88,12 @@ class ExperimentConfig(_Strict):
     synthetic: SyntheticSpec = Field(default_factory=SyntheticSpec)
     decoder: DecoderSpec
     protocol: ProtocolSpec = Field(default_factory=ProtocolSpec)
+    pipeline: PipelineSpec = Field(
+        default_factory=PipelineSpec, description="Preprocessing for real datasets (Stage 2)."
+    )
+    max_subjects: int | None = Field(
+        default=None, ge=2, description="Use only the first N subjects of each real dataset."
+    )
 
 
 def load_experiment_config(path: Path) -> ExperimentConfig:

@@ -20,7 +20,7 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from importlib import metadata
 from pathlib import Path
@@ -29,7 +29,8 @@ from typing import Any
 from neurolayer.data.catalog import DatasetCard, Purpose
 from neurolayer.evaluation.protocol import ProtocolResult
 
-MANIFEST_VERSION = 1
+MANIFEST_VERSION = 2
+"""v2 added ``pipeline_hash`` and ``data_report``."""
 TRACKED_PACKAGES: tuple[str, ...] = (
     "neurolayer", "numpy", "scipy", "scikit-learn", "pydantic",
     "mne", "moabb", "pyriemann", "braindecode", "torch",
@@ -65,6 +66,8 @@ class RunManifest:
     python: str
     platform: str
     packages: dict[str, str]
+    pipeline_hash: str | None = None
+    data_report: dict[str, Any] = field(default_factory=dict)
 
     def to_json(self) -> str:
         """Serialize to pretty-printed JSON."""
@@ -126,6 +129,8 @@ def create_manifest(
     seed: int,
     official: bool,
     repo_root: Path,
+    pipeline_hash: str | None = None,
+    data_report: Mapping[str, Any] | None = None,
 ) -> RunManifest:
     """Assemble a manifest for a run that is about to be (or has been) executed."""
     commit, dirty = git_state(repo_root)
@@ -154,6 +159,8 @@ def create_manifest(
         python=sys.version.split()[0],
         platform=platform.platform(),
         packages=package_versions(),
+        pipeline_hash=pipeline_hash,
+        data_report=json.loads(json.dumps(dict(data_report or {}), default=str)),
     )
 
 

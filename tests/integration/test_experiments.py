@@ -45,7 +45,8 @@ def test_smoke_run_writes_manifest_results_and_summary(
     )
 
     manifest = json.loads((outcome.run_dir / "manifest.json").read_text())
-    assert manifest["manifest_version"] == 1
+    assert manifest["manifest_version"] == 2
+    assert len(manifest["pipeline_hash"]) == 16
     assert manifest["purpose"] == "benchmark"
     assert manifest["datasets"][0]["id"] == "synthetic_mi"
     assert len(manifest["config_hash"]) == 64
@@ -93,5 +94,39 @@ def test_official_run_requires_git_repository(
 def test_real_dataset_without_adapter_fails_loudly() -> None:
     from neurolayer.data.sources import load_epochs
 
-    with pytest.raises(NotImplementedError, match=r"WP-1\.2"):
+    with pytest.raises(NotImplementedError, match="not synthetic"):
         load_epochs(["physionet_mi"])
+
+
+def test_real_dataset_experiment_end_to_end(
+    catalog_dir: Path, repo_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """License gate → adapter → preprocessing → epoching → cache → harness → manifest."""
+    pytest.importorskip("mne")
+    from neurolayer.data.adapters.moabb import MoabbAdapter
+    from tests.fakes import FakeMoabbDataset
+
+    monkeypatch.setattr(
+        "neurolayer.signal.build.get_adapter",
+        lambda card, data_dir=None: MoabbAdapter(card, FakeMoabbDataset((1, 2, 3)), data_dir),
+    )
+    config = ExperimentConfig.model_validate(
+        {
+            "name": "fake-physionet",
+            "purpose": "exploration",  # unverified license: exploration only (ADR-0005)
+            "datasets": ["physionet_mi"],
+            "decoder": {"name": "logvar_logreg"},
+            "protocol": {"ks": [0, 2], "n_folds": None, "min_test_per_class": 3},
+        }
+    )
+    outcome = run_experiment(
+        config,
+        catalog_dir=catalog_dir,
+        output_dir=tmp_path / "runs",
+        repo_root=repo_root,
+        data_root=tmp_path / "data",
+    )
+    assert {r.subject for r in outcome.result.records} == {"sub-001", "sub-002", "sub-003"}
+    manifest = json.loads((outcome.run_dir / "manifest.json").read_text())
+    assert manifest["data_report"]["cache_misses"] == 3
+    assert manifest["pipeline_hash"] == config.pipeline.pipeline_hash()

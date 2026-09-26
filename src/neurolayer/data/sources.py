@@ -1,8 +1,8 @@
 """Resolve catalog dataset ids to :class:`~neurolayer.core.types.EpochSet` objects.
 
-Only synthetic sources exist today. Real-dataset adapters (MOABB/MNE → ``Recording``
-→ Stage 2 epoching) are work package WP-1.2; until then, requesting a real dataset
-fails loudly instead of silently substituting data.
+This module serves synthetic sources only. Real datasets go through
+:func:`neurolayer.signal.build.build_epochs` (adapter → preprocessing → epoching), which
+lives in the signal layer because it applies Stage 2 transforms.
 """
 
 from __future__ import annotations
@@ -44,8 +44,8 @@ def load_epochs(dataset_ids: Sequence[str], synthetic: SyntheticMIConfig | None 
         variant = SYNTHETIC_SOURCES.get(dataset_id)
         if variant is None:
             raise NotImplementedError(
-                f"no adapter for dataset {dataset_id!r} yet: real-dataset ingestion is "
-                "work package WP-1.2 (docs/plan/work-packages.md)"
+                f"{dataset_id!r} is not synthetic: real datasets are loaded through "
+                "neurolayer.signal.build.build_epochs (adapter → preprocessing → epoching)"
             )
         cfg = replace(
             base,
