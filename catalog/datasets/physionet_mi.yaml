@@ -1,0 +1,29 @@
+id: physionet_mi
+name: PhysioNet EEG Motor Movement/Imagery Dataset (EEGMMIDB)
+version: "1.0.0"
+modality: eeg
+paradigms: [motor_imagery, motor_execution]
+n_subjects: 109
+n_channels: 64
+sfreq_hz: 160
+sessions_per_subject: "1 (14 runs)"
+labels: [left_hand, right_hand, both_hands, feet, rest]
+source_url: https://physionet.org/content/eegmmidb/1.0.0/
+citation: >
+  Schalk G. et al. BCI2000: A General-Purpose Brain-Computer Interface System. IEEE TBME 51(6), 2004.
+  Goldberger A. et al. PhysioBank, PhysioToolkit, and PhysioNet. Circulation 101(23), 2000.
+access: open
+loader: "moabb:PhysionetMI"
+roles: [development, pretraining]
+license:
+  spdx: ODC-By-1.0
+  url: https://physionet.org/content/eegmmidb/view-license/1.0.0/
+  evidence: PhysioNet license page (reported via search, 2026-09-26); verify on the page itself.
+  commercial_use: "yes"
+  derivatives: "yes"
+  share_alike: false
+  verified_by: null
+  verified_on: null
+notes: >
+  Channel names carry trailing dots and mixed case (e.g. "Fc5.") — normalized by
+  neurolayer.core.channels. Contains all 8 Neurosity Crown sites (R3 primary montage).

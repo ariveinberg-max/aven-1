@@ -1,0 +1,25 @@
+id: lee2019_mi
+name: Lee et al. 2019 (OpenBMI) — motor imagery subset (GigaDB 100542)
+version: "gigadb-100542"
+modality: eeg
+paradigms: [motor_imagery]
+n_subjects: 54
+n_channels: 62
+sfreq_hz: 1000
+sessions_per_subject: "2"
+labels: [left_hand, right_hand]
+source_url: https://academic.oup.com/gigascience/article/8/5/giz002/5304369
+citation: >
+  Lee M.-H. et al. EEG dataset and OpenBMI toolbox for three BCI paradigms: an investigation
+  into BCI illiteracy. GigaScience 8(5), 2019.
+access: open
+loader: "moabb:Lee2019_MI"
+roles: [development]
+license:
+  spdx: LicenseRef-Unknown
+  evidence: Hosted on GigaDB (typically CC0); not confirmed from the research environment.
+  commercial_use: unclear
+  derivatives: unclear
+  verified_by: null
+  verified_on: null
+notes: Also contains ERP and SSVEP paradigms (CAP-2 candidates) from the same subjects.

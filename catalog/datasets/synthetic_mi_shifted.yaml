@@ -1,0 +1,20 @@
+id: synthetic_mi_shifted
+name: Synthetic motor imagery (site B, shifted)
+version: "1"
+modality: synthetic
+paradigms: [motor_imagery]
+labels: [left_hand, right_hand]
+citation: "neurolayer synthetic generator, src/neurolayer/data/synthetic.py"
+access: internal
+loader: "synthetic:site_b"
+roles: [development]
+license:
+  spdx: LicenseRef-Internal
+  evidence: Generated in-house by our own code; no third-party data involved.
+  commercial_use: "yes"
+  derivatives: "yes"
+  verified_by: neurolayer (generated in-house)
+  verified_on: 2026-09-26
+notes: >
+  Second synthetic "lab" with a shared site perturbation so leave-dataset-out (R2)
+  can be exercised without real data.

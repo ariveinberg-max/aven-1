@@ -1,0 +1,18 @@
+# Leave-dataset-out (R2) + consumer montage (R3) on two synthetic "labs".
+# Source subjects keep all channels; targets only see the 3-channel BCI-IV-2b layout.
+name: smoke-synthetic-r3
+description: R2+R3 harness check with a restricted target montage.
+purpose: benchmark
+datasets: [synthetic_mi, synthetic_mi_shifted]
+synthetic:
+  n_subjects: 5
+  n_trials_per_class: 50
+  seed: 11
+decoder:
+  name: logvar_logreg
+protocol:
+  regime: leave_dataset_out
+  ks: [0, 5, 10, 20]
+  n_unlabeled: 10
+  target_montage: bci_iv_2b
+  n_bootstrap: 500

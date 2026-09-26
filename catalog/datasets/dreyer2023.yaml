@@ -1,0 +1,25 @@
+id: dreyer2023
+name: Dreyer et al. 2023 — large MI database with user profiles
+version: "zenodo-8089820"
+modality: eeg
+paradigms: [motor_imagery]
+n_subjects: 87
+n_channels: null   # verify during the WP-1.4 channel audit
+sfreq_hz: null
+sessions_per_subject: "1"
+labels: [left_hand, right_hand]
+source_url: https://zenodo.org/records/8089820
+citation: >
+  Dreyer P. et al. A large EEG database with users' profile information for motor imagery
+  brain-computer interface research. Scientific Data 10, 580 (2023).
+access: open
+loader: "moabb:Dreyer2023"
+roles: [unassigned]
+license:
+  spdx: LicenseRef-Unknown
+  evidence: Zenodo record; license not confirmed from the research environment.
+  commercial_use: unclear
+  derivatives: unclear
+  verified_by: null
+  verified_on: null
+notes: Locked-holdout candidate (largest single-protocol MI cohort); decided in WP-1.4.

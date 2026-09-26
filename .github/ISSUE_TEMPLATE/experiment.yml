@@ -1,0 +1,21 @@
+name: Experiment proposal
+description: Propose an experiment. Write the prediction before running it.
+title: "EXP: "
+labels: [experiment]
+body:
+  - type: textarea
+    id: question
+    attributes: { label: Question }
+    validations: { required: true }
+  - type: textarea
+    id: hypothesis
+    attributes: { label: Hypothesis and numeric prediction, description: "e.g. BA@10 on R2 improves by ≥3 pp over B3" }
+    validations: { required: true }
+  - type: textarea
+    id: setup
+    attributes: { label: Setup (datasets, regime, budgets, decoder, seeds) }
+    validations: { required: true }
+  - type: textarea
+    id: falsify
+    attributes: { label: What result would refute it? }
+    validations: { required: true }

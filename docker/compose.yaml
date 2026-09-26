@@ -1,0 +1,11 @@
+# Local stack. Run from the repo root: docker compose -f docker/compose.yaml up --build
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/api.Dockerfile
+    ports: ["8000:8000"]
+    environment:
+      NEUROLAYER_API_DOCS: "1"
+    read_only: true
+    tmpfs: [/tmp]

@@ -1,0 +1,11 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "charliermarsh.ruff",
+    "ms-toolsai.jupyter",
+    "dbaeumer.vscode-eslint",
+    "ms-vscode-remote.remote-wsl",
+    "eamodio.gitlens"
+  ]
+}

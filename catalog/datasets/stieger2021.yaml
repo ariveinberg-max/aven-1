@@ -1,0 +1,26 @@
+id: stieger2021
+name: Stieger et al. 2021 — continuous SMR BCI learning in a large population
+version: "figshare-13123148"
+modality: eeg
+paradigms: [motor_imagery]
+n_subjects: 62
+n_channels: 64
+sfreq_hz: 1000
+sessions_per_subject: "up to 11 (598 total)"
+labels: [left_hand, right_hand, both_hands, rest]
+source_url: https://doi.org/10.6084/m9.figshare.13123148
+citation: >
+  Stieger J.R., Engel S.A., He B. Continuous sensorimotor rhythm based brain computer interface
+  learning in a large population. Scientific Data 8, 98 (2021).
+access: open
+loader: "moabb:Stieger2021"
+roles: [unassigned]
+license:
+  spdx: LicenseRef-Unknown
+  evidence: figshare record; license not confirmed from the research environment.
+  commercial_use: unclear
+  derivatives: unclear
+  verified_by: null
+  verified_on: null
+notes: >
+  Longitudinal (cross-session drift, CAP-1 v2) and locked-holdout candidate; decided in WP-1.4.

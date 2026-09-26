@@ -1,0 +1,10 @@
+# Default owner
+*                                   @ariveinberg-max
+
+# Protected: measuring stick, license facts, security posture (changes need an ADR)
+/src/neurolayer/evaluation/         @ariveinberg-max
+/catalog/                           @ariveinberg-max
+/docs/adr/                          @ariveinberg-max
+/.github/                           @ariveinberg-max
+/.pre-commit-config.yaml            @ariveinberg-max
+/AGENTS.md                          @ariveinberg-max

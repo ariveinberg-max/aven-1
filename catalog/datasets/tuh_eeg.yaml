@@ -1,0 +1,27 @@
+id: tuh_eeg
+name: Temple University Hospital EEG Corpus (TUEG)
+version: "tueg-v2"
+modality: eeg
+paradigms: [clinical_resting, clinical_mixed]
+n_subjects: null
+n_channels: null   # heterogeneous clinical montages
+sfreq_hz: null
+labels: []
+source_url: https://isip.piconepress.com/projects/tuh_eeg/
+citation: Obeid I., Picone J. The Temple University Hospital EEG Data Corpus. Frontiers in Neuroscience 10:196, 2016.
+access: dua
+loader: null
+roles: [pretraining]
+license:
+  spdx: LicenseRef-DUA
+  url: https://isip.piconepress.com/projects/tuh_eeg/
+  evidence: >
+    Access via a signed request form; secondary sources report research and commercialization
+    are permitted. The actual agreement must be read and filed before any use.
+  commercial_use: unclear
+  derivatives: unclear
+  verified_by: null
+  verified_on: null
+notes: >
+  26,846 recordings (2002–2017), >60k EEGs in the ongoing project. Channel names like
+  "EEG FP1-REF" and legacy T3/T4/T5/T6 are normalized by neurolayer.core.channels.

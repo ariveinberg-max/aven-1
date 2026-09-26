@@ -1,0 +1,26 @@
+# End-to-end smoke test on synthetic data (runs in CI via `neurolayer smoke`).
+# Exercises: license gate -> data -> R1 folds -> chronological calibration -> decoder -> metrics -> manifest.
+name: smoke-synthetic
+description: CAP-1 harness smoke test with the reference log-variance decoder on synthetic MI.
+purpose: benchmark
+datasets: [synthetic_mi]
+synthetic:
+  n_subjects: 6
+  n_trials_per_class: 50
+  sfreq: 128
+  trial_seconds: 2.0
+  seed: 7
+  signal_to_noise: 0.5      # harder than default: some simulated users stay below 70%
+  subject_variability: 1.0
+decoder:
+  name: logvar_logreg
+  params: {calibration_share: 0.5}
+protocol:
+  regime: within_dataset
+  ks: [0, 5, 10, 20]
+  n_unlabeled: 10
+  n_folds: 3
+  min_test_per_class: 10
+  trial_seconds: 2.0
+  n_bootstrap: 500
+  seed: 0

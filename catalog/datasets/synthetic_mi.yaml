@@ -1,0 +1,22 @@
+id: synthetic_mi
+name: Synthetic motor imagery (site A)
+version: "1"
+modality: synthetic
+paradigms: [motor_imagery]
+n_subjects: null          # configurable per experiment
+n_channels: null
+sfreq_hz: null
+labels: [left_hand, right_hand]
+citation: "neurolayer synthetic generator, src/neurolayer/data/synthetic.py"
+access: internal
+loader: "synthetic:site_a"
+roles: [development]
+license:
+  spdx: LicenseRef-Internal
+  evidence: Generated in-house by our own code; no third-party data involved.
+  commercial_use: "yes"
+  derivatives: "yes"
+  verified_by: neurolayer (generated in-house)
+  verified_on: 2026-09-26
+notes: >
+  For tests, CI and smoke runs only. Never used to support a capability claim.

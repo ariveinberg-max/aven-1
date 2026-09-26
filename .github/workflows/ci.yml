@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python (lint · types · layers · tests · smoke)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install (locked)
+        run: uv sync --locked --extra api
+      - name: Lint
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: Type check (mypy --strict)
+        run: uv run mypy
+      - name: Architecture layering (import-linter)
+        run: uv run lint-imports
+      - name: Tests
+        run: uv run pytest --cov --cov-report=term-missing
+      - name: End-to-end smoke (synthetic CAP-1 harness)
+        run: uv run neurolayer smoke
+      - name: No data or weights tracked in git
+        run: uv run python scripts/check_no_data_files.py --all
+
+  web:
+    name: Web (lint · types · build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+
+  security:
+    name: Security (secrets · dependency audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: astral-sh/setup-uv@v6
+      - name: Python dependency audit (pip-audit)
+        run: |
+          uv export --locked --no-hashes --no-dev --extra api --no-emit-project > requirements-audit.txt
+          # Fully pinned export: audit without re-resolving (--disable-pip --no-deps).
+          uvx pip-audit --strict --disable-pip --no-deps -r requirements-audit.txt
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: npm audit (runtime deps, high+)
+        working-directory: apps/web
+        run: npm audit --omit=dev --audit-level=high

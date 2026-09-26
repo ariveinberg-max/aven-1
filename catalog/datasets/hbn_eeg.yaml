@@ -1,0 +1,28 @@
+id: hbn_eeg
+name: Healthy Brain Network EEG (HBN-EEG releases on OpenNeuro)
+version: "openneuro-ds005505..ds005515"
+modality: eeg
+paradigms: [resting_state, cognitive_tasks, passive_viewing]
+n_subjects: 2600
+n_channels: 128
+sfreq_hz: 500
+labels: []
+source_url: https://openneuro.org/datasets/ds005505/versions/1.0.0
+citation: >
+  Shirazi S.Y. et al. HBN-EEG: The FAIR implementation of the Healthy Brain Network (HBN)
+  electroencephalography dataset. bioRxiv 2024.10.03.615261.
+access: open
+loader: null
+roles: [pretraining]
+license:
+  spdx: CC-BY-SA-4.0
+  url: https://openneuro.org/datasets/ds005505/versions/1.0.0
+  evidence: >
+    OpenNeuro listing reports CC BY-SA 4.0, except a separate not-for-commercial-use release
+    (which must not be downloaded into this catalog entry).
+  commercial_use: "yes"
+  derivatives: "yes"
+  share_alike: true
+  verified_by: null
+  verified_on: null
+notes: Share-alike — legal review required before training shippable weights (ADR-0005).

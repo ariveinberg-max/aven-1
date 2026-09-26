@@ -1,180 +1,102 @@
-# Aven-1
+# neurolayer
 
-A language model built entirely from scratch — no pretrained weights, no API key, no downloaded model. Every piece was written and trained here: a byte-pair tokenizer trained on this project's own text, a causal Transformer, a training loop, and a full RLHF pipeline (reward model, RAFT, PPO, and now DPO) built on real human preference labels, not synthetic ones.
+**A new way for humans to interact with computers.** neurolayer learns patterns in a person's neural signals and turns them into useful interactions for games, computers, AR/VR, accessibility, robotics and everyday AI. The person does not need to know any neuroscience.
 
-The verified local checkpoint is **58,424,832 parameters** (8 layers, width 768, 192-token context, 2,048-token vocabulary), fine-tuned through multiple iterations of real instruction data. A separate **153M-parameter** pretraining track tests the same pipeline at larger scale. Both are documented in `WRITEUP.md`, including what broke along the way and what fixing it taught — that write-up is the honest, detailed version of this project; this README is the quick-start.
-
-This is not a general assistant, a conscious system, or a model with vision, voice, or web access. It answers from what it was actually trained on, nothing more.
-
-## Try it in 30 seconds
-
-Double-click **Start Brain.command**, keep the Terminal window open, and visit http://127.0.0.1:8765 if your browser doesn't open automatically. Click **Generate text** to try the existing checkpoint immediately — no setup required. Close the server with Control-C; closing the browser tab alone does not stop training.
-
-If macOS won't launch the command file directly:
-
-```sh
-cd /Users/ariveinbers/Documents/Codex/my-ai-brain
-.venv/bin/python server.py
+```
+brain activity → neural sensors → neurolayer (signal processing → neural representation → intent decoding) → API → action
 ```
 
-## What's actually in here
+> `neurolayer` is a working code name. Rename it before any public release, after a trademark search.
 
-- **Pretraining and tokenization** (`brain.py`, `tokenizer.py`, `train.py`) — a from-scratch byte-pair tokenizer and causal Transformer, trained on this project's own corpus.
-- **Instruction fine-tuning** (`make_instructions.py`) — a programmatically generated dataset teaching the model to answer instead of just continuing text.
-- **RLHF, for real** (`preferences.py`, `reward_model.py`, `train_reward.py`, `raft.py`, `ppo.py`, `dpo.py`) — real human preference collection through the dashboard, a reward model, RAFT (reward-ranked fine-tuning), full PPO with PPO-ptx, and DPO (direct preference optimization) — four different real methods against the same real data, compared honestly rather than assumed to work.
-- **A local dashboard and chat interface** (`server.py`, `ui.html`, `chat.html`) — training controls, live loss charts, a preference-labeling panel, a training-data workspace, and note storage kept explicitly separate from the model's learned weights.
-- **Real experiment tracking** — Weights & Biases integration (loss, perplexity, gradient/weight norms, sample generations over time) plus a local `runs/ledger.jsonl` for an offline history of every run.
+## The technical bet
 
-Full narrative, including every real regression and how it was found: `WRITEUP.md`. Ongoing task handoffs and open questions: `research/TASKS.md`.
+Neural signals differ between people and between devices. Today every non-invasive brain-computer interface needs per-user calibration, which is the main reason nobody uses one casually.
 
-## Train on your own text
+Our research ([docs/research](docs/research/README.md)) found that one slice of this problem is **unowned by companies and unbenchmarked in academia**:
 
-Use UTF-8 plain text you own or have permission to train on (4 KB–20 MB). To start a fresh run while preserving the current one: pause training, stop the server, rename `checkpoints/` to something like `checkpoints-backup`, save your text as `data/training.txt`, and reopen the app.
+> **Calibration-efficient intent decoding on low-channel consumer EEG, across people and devices, trained only on commercially clean data.**
 
-From the command line:
+Our first measurable capability is **[CAP-1](docs/product/cap-1-calibration-efficient-intent.md)**:
 
-```sh
-.venv/bin/python train.py --data data/training.txt --steps 200 --resume
+- **Task:** a new person, on an electrode layout we never trained on, gets left/right motor-intent control.
+- **Measure:** the *calibration-efficiency curve*, which is accuracy after 0, 5, 10, 20 and 40 calibration trials.
+- **Rigor:**
+  - held-out subjects and held-out datasets
+  - leakage controls
+  - a reproduced baseline suite
+
+## What is in the repo today (Stage 0: foundations)
+
+| Area | Status |
+|------|--------|
+| Research brief: companies, models, datasets, patents, regulation, gap analysis | ✅ [docs/research](docs/research/README.md) |
+| Capability spec (CAP-1) and roadmap | ✅ [docs/product](docs/product/) |
+| Architecture, data model, evaluation protocol, security, reproducibility, 8 ADRs | ✅ [docs/architecture](docs/architecture/overview.md), [docs/adr](docs/adr/README.md) |
+| Canonical data types, channel naming, consumer-device montages | ✅ `src/neurolayer/core` |
+| Dataset catalog + **license gate** (exploration / benchmark / training) | ✅ `catalog/datasets`, `src/neurolayer/data/catalog.py` |
+| **CAP-1 evaluation harness**: disjoint folds, chronological calibration, metrics | ✅ `src/neurolayer/evaluation` |
+| Synthetic motor-imagery generator (tests and CI only) | ✅ `src/neurolayer/data/synthetic.py` |
+| Run manifests (git commit, config hash, dataset licenses, seeds) | ✅ `src/neurolayer/tracking` |
+| API skeleton (FastAPI) and dashboard skeleton (Next.js) | ✅ `src/neurolayer_api`, `apps/web` |
+| CI, pre-commit, data-file guard, secret scanning, Dependabot | ✅ `.github`, `.pre-commit-config.yaml` |
+| Real-dataset ingestion → baselines → proprietary model → API → product → real-world | ⏭ [docs/plan/work-packages.md](docs/plan/work-packages.md) |
+
+## Quickstart
+
+Prerequisites:
+
+- [uv](https://docs.astral.sh/uv/)
+- Node 22 (for the web app only)
+- On the Windows GPU PC, use WSL2 (see [dev setup](docs/guides/dev-setup.md))
+
+```bash
+make setup            # uv sync + pre-commit hooks
+make check            # lint, format, types, layering, tests, data guard
+make smoke            # end-to-end CAP-1 harness run on synthetic data
+uv run neurolayer catalog list                 # datasets and their license status
+uv run neurolayer catalog check --purpose training
+make api              # http://localhost:8000/healthz
+make web              # http://localhost:3000
 ```
 
-A checkpoint records its corpus hash and refuses a different corpus on resume, preserving model weights, optimizer state, step count, and RNG state. Checkpoints save every 20 steps, on normal completion, and on a handled pause — force-quitting can lose steps since the last save. Run one training process at a time.
+Example `make smoke` output (synthetic data and a reference decoder, so this is a pipeline check and **not** a result):
 
-## Learned weights vs. training data vs. stored memory
-
-Three things this project keeps explicitly separate, on purpose:
-
-- **Learned weights** (`checkpoints/latest.pt`) — changed only by training, never edited directly.
-- **Training-data workspace** (`data/sources/*.txt`) — plain text a *future* run would learn from, managed from the dashboard's workspace panel and compiled into `data/training.txt`.
-- **Memory** (`memory.db`) — a plain SQLite note store you write and read directly (`/recall topic` in chat). It's never read by training and never changes a model weight — inspectable, external storage, the opposite of the model's opaque parameters.
-
-## Recreate the environment
-
-```sh
-python3.11 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -m unittest discover -p "test_*.py"
+```
+ k/class  mean BA            95% CI  median  UUR@70%
+       0    0.710    [0.625, 0.779]   0.735     0.67
+       5    0.718    [0.611, 0.800]   0.727     0.67
+      10    0.765    [0.660, 0.834]   0.790     0.83
+      20    0.775    [0.678, 0.850]   0.773     0.83
+AUCEC:      0.731
 ```
 
-No internet access is required to run or train the model — only the first-time dependency install needs it. No model weights or external datasets are downloaded.
+## Repository map
 
----
-
-## Technical reference
-
-The sections below cover accumulated detail — experiment tracking internals, checkpoint integrity guarantees, inference benchmarks, and evaluation protocol. Skip this on a first read; come back when you need the specifics.
-
-### Tracking training runs
-
-- **Weights & Biases** (cloud, free tier, project `aven-1`): pass `--wandb` to `train.py` for full run tracking at https://wandb.ai/ariveinberg-ari-research/aven-1. Uploads run metrics and config — not your training text:
-  - Loss/perplexity: train loss, held-out loss, held-out perplexity, every 20 steps
-  - Optimizer health: gradient norm (pre-clip) and total weight norm
-  - Gradient/weight histograms per layer (`wandb.watch`, every 100 steps)
-  - Throughput (tokens/sec)
-  - A live sample-generations table (fixed probe prompts, regenerated every 100 steps)
-  - Full run config (architecture, dataset, tokenizer compression ratio, learning rate, batch size)
-  - System metrics (CPU/memory), captured automatically
-
-  One-time setup:
-
-  ```sh
-  .venv/bin/pip install wandb
-  .venv/bin/wandb login
-  .venv/bin/python train.py --data data/training.txt --resume --steps 200 --wandb
-  ```
-
-  The dashboard's **Resume training** button auto-adds `--wandb` once you're logged in (detected via `~/.netrc`).
-
-- **Run ledger** (`runs/ledger.jsonl`): one line per finished/paused/errored run — architecture, dataset, final perplexity, timestamp. Always written locally regardless of W&B.
-
-See `WANDB.md` for the full metric catalog. `checkpoints/status.json` drives the live dashboard panel.
-
-### Hyperparameter sweeps
-
-`train.py --sweep` runs an isolated, throwaway trial under `sweeps/` — never touches `checkpoints/`, reuses an existing tokenizer, caches the encoded corpus for fast repeated trials. Combined with a W&B Sweep:
-
-```sh
-.venv/bin/wandb sweep sweep.yaml
-.venv/bin/wandb agent <entity>/aven-1/<sweep-id>
+```
+AGENTS.md            rules for AI coding agents (Codex, Claude Code). Read first
+catalog/datasets/    dataset cards (provenance + license) that drive the license gate
+configs/experiments/ experiment configs. Every run starts from one
+src/neurolayer/      proprietary core: core · data · signal · representation · models · evaluation · tracking · experiments · cli
+src/neurolayer_api/  FastAPI service
+apps/web/            Next.js + TypeScript dashboard
+tests/               unit · integration · api (synthetic data only)
+docs/                research · product · architecture · adr · plan · guides · experiments · results
+data/, artifacts/    git-ignored: datasets (DVC) and run outputs
 ```
 
-`sweep.yaml` searches learning rate, dropout, and batch size on a small architecture over the instruction corpus. Trial files under `sweeps/run-*/` are safe to delete.
+## How we work
 
-### Faster inference
+- **Stages with gates:**
+  research → architecture → dataset → baseline → proprietary model → API → product → real-world testing ([roadmap](docs/product/roadmap.md)).
+- **Work packages:** every change implements one WP from [docs/plan](docs/plan/work-packages.md), with its acceptance criteria and tests. This is how AI agents get well-scoped tasks instead of "build me a brain AI".
+- **Experiments are cards + configs + manifests.** Negative results are recorded too ([docs/experiments](docs/experiments/TEMPLATE.md), [results ledger](docs/results/README.md)).
+- **Decisions are ADRs.** Agents propose ADRs; they do not silently change decisions.
 
-Generation reuses per-layer attention keys/values while there's room in the context window (`Brain.generate(..., use_cache=False)` is the comparison path). Measured 2.90x faster generation within the window on the checked-in CPU benchmark (`research/benchmarks/inference-cpu.json`), with identical greedy output verified bit-for-bit against the non-cached path. This is a local synthetic benchmark, not a measured speedup for the production checkpoint specifically.
+## Security and IP
 
-```sh
-.venv/bin/python benchmark_inference.py --output work/inference-benchmark.json
-```
+- Neural data from people is sensitive. It never goes into git, and never to third-party LLM APIs ([security and privacy](docs/architecture/security-and-privacy.md)).
+- **This repository is currently public.** Make it private before proprietary model work begins ([why](docs/research/04-patents-and-ip.md#43-urgent-this-repository-is-public)).
 
-Chat fits recent conversation turns to the checkpoint's context limit, reports omitted history explicitly, and refuses to silently answer a truncated question.
+## License
 
-### Isolated response-only fine-tuning
-
-Experiment from an existing checkpoint without touching its directory:
-
-```sh
-.venv/bin/python train.py --init-from checkpoints \
-  --output-dir work/experiments/response-tuning \
-  --data data/instructions.txt --loss-mode response --steps 200 --lr 1e-5
-```
-
-Records the parent checkpoint hash; the source run is untouched. The instruction file needs `### Instruction:`, `### Response:`, and `<|end|>` on separate lines — prompt tokens provide context but are excluded from the loss.
-
-Resume the same experiment:
-
-```sh
-.venv/bin/python train.py --output-dir work/experiments/response-tuning \
-  --data data/instructions.txt --resume --steps 200
-```
-
-### Checkpoint integrity and recovery
-
-- Training takes a process lock on its output directory; the dashboard detects external writers and refuses duplicate starts.
-- Token caches are checksummed; damaged caches are detected, not silently trusted.
-- Checkpoints record tokenizer identity — resuming with a changed tokenizer is rejected.
-- Atomic writes: a failed write leaves the previous checkpoint in place. Nonfinite gradients stop before an optimizer update.
-- Export a portable, checksummed snapshot without stopping an active writer:
-
-```sh
-.venv/bin/python checkpoint_bundle.py export --source checkpoints \
-  --destination work/checkpoint-bundles/my-snapshot
-.venv/bin/python checkpoint_bundle.py verify work/checkpoint-bundles/my-snapshot
-```
-
-### RLHF data quality
-
-Reward/DPO training groups validation by normalized prompt so a prompt never appears in both splits, and excludes duplicate, contradictory, identical-response, and oversized comparisons — without modifying the underlying preference database. At least four usable comparisons across two prompts are required. New reward checkpoints are checked for tokenizer compatibility by RAFT, PPO, and DPO alike.
-
-### Chat tools: calculator and recall
-
-Chat handles complete arithmetic expressions (parentheses, operator precedence, negative numbers, exact decimals — try `Calculate (2+3)*4`) and note recall (`/recall engine` or `search my notes about engine`, ranked with BM25 scoring, missing matches reported explicitly). Both work without a loaded checkpoint and are labeled distinctly from ordinary model answers. Retrieval is local word matching, not semantic embeddings — notes are never created automatically from conversations.
-
-### Reproducible retries
-
-`run_resilient.sh` assigns a stable budget ID to each chunk; checkpoints preserve that chunk's absolute target, so retrying after a saved partial run finishes the remaining steps instead of adding the full requested count again. Checkpoints also save CPU and active-backend random state — moving between backends restores CPU sampling state and records the change, without promising identical floating-point results across hardware.
-
-### External evaluation
-
-```sh
-.venv/bin/python eval_heldout.py checkpoints/latest.pt \
-  --output work/external-evaluation.json --device cpu
-```
-
-Reports include checkpoint/tokenizer/source hashes, exact target count, and loss. Capability corpus-overlap checks stream normalized text rather than loading full corpora into memory.
-
-## Files
-
-- `brain.py` — embeddings, causal attention, Transformer blocks, KV-cached generation.
-- `train.py` — data split, optimization, validation, checkpointing, tokenizer training/reuse, W&B + ledger logging, sweep mode.
-- `tokenizer.py` — from-scratch byte-pair encoding, trained on this project's own corpus.
-- `make_instructions.py` — generates the programmatic instruction-tuning corpus.
-- `preferences.py`, `reward_model.py`, `train_reward.py`, `raft.py`, `ppo.py`, `dpo.py`, `value_model.py` — the full RLHF pipeline, four real methods against the same real preference data.
-- `server.py`, `ui.html`, `chat.html` — local dashboard, preference-labeling panel, and chat interface.
-- `memory.py` — SQLite-backed notes storage, separate from model weights.
-- `sources.py` — training-data workspace management and corpus compilation.
-- `checkpoint_bundle.py` — portable, checksummed checkpoint export/verify.
-- `checkpoints/latest.pt` — trained weights, optimizer state, and tokenizer (`checkpoints/tokenizer.json`).
-- `runs/ledger.jsonl` — one-line-per-run summary log.
-- `research/TASKS.md` — ongoing handoffs, open bugs, and honest findings, in order.
-- `WRITEUP.md` — the full narrative: what was built, what broke, and what fixing it taught.
+Proprietary. All rights reserved. See [LICENSE](LICENSE).

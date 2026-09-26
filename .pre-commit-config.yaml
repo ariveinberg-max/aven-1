@@ -1,0 +1,47 @@
+# Install: `make setup` (runs `pre-commit install`). Run on everything: `uv run pre-commit run --all-files`.
+# Tools that also exist in uv.lock run as local hooks, so hooks, CI and editors use the same versions.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+        exclude: ^(uv\.lock|apps/web/package-lock\.json)$
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+        exclude: ^apps/web/tsconfig\.json$
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.28.0
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: no-neural-data
+        name: block neural data, arrays and model weights
+        entry: uv run python scripts/check_no_data_files.py
+        language: system
+        pass_filenames: true
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix
+        language: system
+        types_or: [python, pyi]
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
+      - id: nbstripout
+        name: strip notebook outputs
+        entry: uv run nbstripout
+        language: system
+        files: \.ipynb$

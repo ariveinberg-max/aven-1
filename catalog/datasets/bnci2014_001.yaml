@@ -1,0 +1,24 @@
+id: bnci2014_001
+name: BCI Competition IV dataset 2a (BNCI Horizon 001-2014)
+version: "bnci-001-2014"
+modality: eeg
+paradigms: [motor_imagery]
+n_subjects: 9
+n_channels: 22
+sfreq_hz: 250
+sessions_per_subject: "2"
+labels: [left_hand, right_hand, feet, tongue]
+source_url: https://bnci-horizon-2020.eu/database/data-sets
+citation: Tangermann M. et al. Review of the BCI Competition IV. Frontiers in Neuroscience 6:55, 2012.
+access: open
+loader: "moabb:BNCI2014_001"
+roles: [benchmark_only]
+license:
+  spdx: CC-BY-ND-4.0
+  url: https://bnci-horizon-2020.eu/database/data-sets
+  evidence: Listed by BNCI Horizon as CC BY-ND 4.0 (reported via search); verify on the site.
+  commercial_use: "yes"
+  derivatives: "no"
+  verified_by: null
+  verified_on: null
+notes: No-derivatives terms — benchmark comparisons only, never training.

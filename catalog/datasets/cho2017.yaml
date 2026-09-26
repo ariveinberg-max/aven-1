@@ -1,0 +1,25 @@
+id: cho2017
+name: Cho et al. 2017 — EEG datasets for motor imagery BCI (GigaDB 100295)
+version: "gigadb-100295"
+modality: eeg
+paradigms: [motor_imagery]
+n_subjects: 52
+n_channels: 64
+sfreq_hz: 512
+sessions_per_subject: "1"
+labels: [left_hand, right_hand]
+source_url: https://gigadb.org/dataset/100295
+citation: Cho H. et al. EEG datasets for motor imagery brain-computer interface. GigaScience 6(7), 2017.
+access: open
+loader: "moabb:Cho2017"
+roles: [development]
+license:
+  spdx: LicenseRef-Unknown
+  url: https://gigadb.org/dataset/100295
+  evidence: >
+    GigaDB datasets are typically CC0; the article is CC BY 4.0. Not confirmed on the
+    dataset page from the research environment.
+  commercial_use: unclear
+  derivatives: unclear
+  verified_by: null
+  verified_on: null

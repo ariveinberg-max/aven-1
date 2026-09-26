@@ -1,0 +1,16 @@
+# TEMPLATE, blocked on WP-1.2 (PhysioNet adapter) and WP-1.1 (license verification).
+# Running it today fails loudly at the license gate, which is intended.
+name: cap1-r1-physionet-logvar
+description: CAP-1 regime R1 on PhysioNet MI with the reference decoder (pipeline check, not a baseline).
+purpose: benchmark
+datasets: [physionet_mi]
+decoder:
+  name: logvar_logreg
+protocol:
+  regime: within_dataset
+  ks: [0, 5, 10]          # PhysioNet has ~22 L/R imagery trials per class per subject
+  n_unlabeled: 10
+  n_folds: 5
+  min_test_per_class: 5
+  trial_seconds: 4.0
+  seed: 0
