@@ -108,7 +108,11 @@ markers = [
   "network: requires internet access; opt-in only",
   "gpu: requires a CUDA GPU",
 ]
-filterwarnings = ["error"]
+filterwarnings = [
+  "error",
+  # Third-party: braindecode builds an MNE montage by a deprecated name at import time.
+  "ignore:Montage name 'standard_1020' is deprecated:FutureWarning",
+]
 
 [tool.coverage.run]
 source = ["neurolayer", "neurolayer_api"]

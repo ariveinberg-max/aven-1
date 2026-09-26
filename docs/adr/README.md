@@ -23,3 +23,5 @@ AI agents must **propose** an ADR, never silently change a decided item.
 | [0007](0007-third-party-model-policy.md) | Third-party foundation models: baselines and initializations only when license-clean | Accepted |
 | [0008](0008-first-capability-motor-intent.md) | First capability is calibration-efficient motor intent (CAP-1) | Accepted |
 | [0009](0009-locked-holdout-selection.md) | Locked holdout selection rule (dataset choice pending audit) | Proposed |
+| [0010](0010-multi-seed-shuffle-control.md) | Label-shuffle control over ≥ 5 seeds | Accepted |
+| [0011](0011-cap1-gate1-thresholds.md) | CAP-1 Gate 2 margins: procedure fixed, numbers pending real baselines | Proposed |

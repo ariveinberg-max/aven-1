@@ -155,7 +155,8 @@ Legend: ✅ done · 🔜 next · ⏳ blocked by dependency · 👤 human task
 
 ## Stage 3: Neural representation
 
-### WP-3.1: Covariance and tangent-space encoders
+### WP-3.1: Covariance and tangent-space encoders ✅
+- **Done:** `neurolayer.representation.covariance` (`TangentSpaceEncoder`, `CSPEncoder`, `LogVarianceEncoder`) and an encoder registry.
 - **Scope:**
   - `CovarianceEncoder` (shrinkage covariance)
   - `TangentSpaceEncoder` (pyRiemann, reference point configurable)
@@ -164,7 +165,8 @@ Legend: ✅ done · 🔜 next · ⏳ blocked by dependency · 👤 human task
   All implement `Encoder`.
 - **Tests:** shapes, SPD validity, determinism.
 
-### WP-3.2: Alignment methods (calibration-time adaptation components)
+### WP-3.2: Alignment methods (calibration-time adaptation components) ✅ (rotation deferred)
+- **Done:** Euclidean alignment, Riemannian re-centering and stretching in `neurolayer.representation.alignment`. **Deferred:** the supervised RPA rotation step.
 - **Scope:**
   - Euclidean alignment
   - Riemannian re-centering
@@ -173,7 +175,8 @@ Legend: ✅ done · 🔜 next · ⏳ blocked by dependency · 👤 human task
   Each is a fit-on-subject transform using only **calibration or unlabeled** data.
 - **Tests:** aligned target covariance mean ≈ identity; the implementation cannot access test data (checked by an API design review).
 
-### WP-3.3: PyTorch training scaffold
+### WP-3.3: PyTorch training scaffold ✅
+- **Done:** `neurolayer.representation.torch_utils`: seeding (**before** model construction), device selection, early stopping on source-only grouped validation, fine-tuning, safetensors checkpoints with SHA-256 verification, and `torch.load(weights_only=True)` fallback. GPU Dockerfile variant still open.
 - **Scope:**
   - `neurolayer.representation.torch` with a deterministic trainer: seeds, `torch.use_deterministic_algorithms` for official runs, AMP option, early stopping on **source-only** validation
   - checkpoints via **safetensors**
@@ -181,7 +184,8 @@ Legend: ✅ done · 🔜 next · ⏳ blocked by dependency · 👤 human task
   - GPU Dockerfile variant
 - **Tests:** a tiny model overfits a tiny synthetic set; resume from checkpoint reproduces the loss curve.
 
-### WP-3.4: Third-party foundation-model adapters (license-gated)
+### WP-3.4: Third-party foundation-model adapters (license-gated) ✅ mechanism · ⏳ weights
+- **Done:** model cards (`catalog/models/`: LaBraM, CBraMod, REVE, MIRepNet), a model license gate, hash-verified loading, and `BraindecodeDecoder` support for Labram/CBraMod. **Pending (human, network):** download weights, review the licenses, pin SHA-256 in the cards. MIRepNet is not in Braindecode; vendoring its MIT code is a follow-up.
 - **Scope:** adapters for MIRepNet and LaBraM/CBraMod as `Encoder` implementations, for **benchmark use**. Requirements:
   - weights pinned by SHA-256
   - loaded with `weights_only=True` or safetensors
@@ -194,18 +198,21 @@ Legend: ✅ done · 🔜 next · ⏳ blocked by dependency · 👤 human task
 
 ## Stage 4: Baselines (Gate 1)
 
-### WP-4.1: Baseline suite B0–B6 as registered decoders
+### WP-4.1: Baseline suite B0–B6 as registered decoders ✅ B0–B4 · ⏳ B5/B6 weights
+- **Done:** B1 `csp_lda_subject`, B2 `ts_lr_subject`, B3 `ts_lr_pooled`, B4 `braindecode`/EEGNet. Generated configs for dev pool and synthetic pool × R1–R3 (`scripts/make_baseline_configs.py`).
 - **Scope:** implement the baselines in [CAP-1 §4](../product/cap-1-calibration-efficient-intent.md#4-baseline-suite-must-be-reproduced-before-any-proprietary-claim), each registered in `models/registry.py` with an experiment config per regime (R0–R3).
 - **Tests:** each decoder passes the harness contract tests (`tests/unit/test_protocol.py` patterns: no label peeking, deterministic given seed).
 
-### WP-4.2: Baseline report and CAP-1 thresholds
+### WP-4.2: Baseline report and CAP-1 thresholds ✅ tooling · ⏳ real data
+- **Done:** `neurolayer report compare` (paired Wilcoxon + Holm, CIs, UUR, AUCEC, TTC, SVG curves). A synthetic demonstration is in `docs/results/synthetic/`. ADR-0011 fixes the threshold procedure; the numbers wait for real runs.
 - **Scope:** official runs of B0–B6 × R0–R3 on the development pool, plus `docs/results/gate-1-baselines.md`. It contains:
   - CEC plots
   - tables (BA@k, UUR@k, AUCEC, TTC)
   - paired comparisons
 - **Decide:** the numeric CAP-1 margins (Δ) in **ADR-0010**, before the locked holdout is touched.
 
-### WP-4.3: Leakage controls
+### WP-4.3: Leakage controls ✅
+- **Done:** multi-seed label-shuffle control (`neurolayer control`, ADR-0010) and identity/dataset-ID probes (`neurolayer probe`). Gate 0 tooling (`neurolayer gate0`, network) reproduces MOABB within-session scores with matched preprocessing.
 - **Scope:**
   - label-shuffle control run
   - identity probe and dataset-ID probe on encoder outputs

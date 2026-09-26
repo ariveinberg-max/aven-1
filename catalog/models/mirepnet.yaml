@@ -1,0 +1,15 @@
+id: mirepnet
+name: MIRepNet
+architecture: vendored:MIRepNet   # not in braindecode; vendoring the MIT code is a follow-up (WP-3.4)
+source_url: https://github.com/staraink/MIRepNet
+citation: MIRepNet - A Pipeline and Foundation Model for EEG-Based Motor Imagery Classification. arXiv:2507.20254.
+code_license: MIT
+weights:
+  url: null            # TODO(verify)
+  sha256: null
+  license: LicenseRef-Unknown
+  pretraining_data: ["seven MOABB motor-imagery datasets per the README (verify which)"]
+  evidence: Code MIT (repository, read 2026-09-26).
+roles: [baseline]
+notes: >
+  B5. Check whether its pretraining datasets overlap our locked holdout (ADR-0009 tie-break).

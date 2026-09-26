@@ -99,7 +99,7 @@ Gate 0 is passed when B1 and B2 reproduce published MOABB within-session results
 4. **No normalization statistics from the test window** (for example, per-subject z-scoring must use only calibration or unlabeled-window data).
 5. **Hyperparameters are tuned on source subjects only** (inner cross-validation), never on target subjects or the locked holdout.
 6. **Leakage controls reported with every Gate result:**
-   - *Label-shuffle control:* retrain with shuffled source labels. BA must be ≈ 0.5.
+   - *Label-shuffle control:* retrain with shuffled labels over ≥ 5 seeds. The across-seed mean BA must be ≈ 0.5 at every k (ADR-0010).
    - *Identity probe:* how well subject identity can be decoded from the representation (reported; large values flag the identity trap).
    - *Dataset-ID probe:* same for dataset identity (flags dataset shortcuts in R2).
 7. **All subjects are reported**, including inefficient ones. No cherry-picking of subjects.

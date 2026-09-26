@@ -89,7 +89,7 @@ Consequences:
 
 Implemented in WP-4.3:
 
-1. **Label-shuffle:** permute source labels within each subject, then run the protocol. Expect BA ≈ chance, with the CI including 0.5.
+1. **Label-shuffle** (ADR-0010): permute source and calibration labels within each subject, then run the protocol with **≥ 5 shuffle seeds** (`neurolayer control`). Pass if, at every k, |across-seed mean BA − 0.5| ≤ max(2 × SE, 0.02). A single seed is not enough: its bootstrap CI ignores the classifier randomness shared by all subjects.
 2. **Identity probe:** logistic regression predicting `subject` from the frozen representation of source epochs (cross-validated). Report its accuracy. It is not a pass/fail, but it must be reported next to any foundation-model result.
 3. **Dataset-ID probe:** same for `dataset` in R2.
 4. **Test-window normalization audit:** static review. Decoders must not compute statistics from `predict` inputs across trials, *unless* it is declared as online test-time adaptation. In that case the causal (past-only) variant is used and reported separately.

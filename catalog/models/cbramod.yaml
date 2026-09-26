@@ -1,0 +1,14 @@
+id: cbramod
+name: CBraMod
+architecture: braindecode:CBraMod
+source_url: https://github.com/wjq-learning/CBraMod
+citation: Wang J. et al. CBraMod - A Criss-Cross Brain Foundation Model for EEG Decoding. ICLR 2025.
+code_license: MIT
+weights:
+  url: https://huggingface.co/weighting666/CBraMod
+  sha256: null         # pin after download and review
+  license: LicenseRef-Unknown
+  pretraining_data: ["clinical EEG corpus (reported TUEG; verify)"]
+  evidence: Code MIT and weights on Hugging Face per the README (read 2026-09-26).
+roles: [baseline]
+notes: B6 candidate.

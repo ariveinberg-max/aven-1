@@ -6,6 +6,8 @@ Command groups live in submodules; each registers its subcommands and a handler:
 ``run``      run an experiment config; ``smoke`` runs the synthetic smoke test
              (:mod:`neurolayer.cli.experiments`)
 ``data``     fetch, verify, audit and QA real datasets (:mod:`neurolayer.cli.data`)
+``report``   compare runs; ``probe`` leakage probes; ``gate0`` MOABB reproduction
+             (:mod:`neurolayer.cli.reports`)
 """
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from neurolayer import __version__
-from neurolayer.cli import catalog, data, experiments
+from neurolayer.cli import catalog, data, experiments, reports
 
 DEFAULT_CATALOG = Path("catalog/datasets")
 DEFAULT_OUTPUT = Path("artifacts/runs")
@@ -32,7 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help="run output dir")
     parser.add_argument("--data-root", type=Path, default=DEFAULT_DATA_ROOT, help="data dir")
     commands = parser.add_subparsers(dest="command", required=True)
-    for module in (catalog, experiments, data):
+    for module in (catalog, experiments, data, reports):
         module.register(commands)
     return parser
 

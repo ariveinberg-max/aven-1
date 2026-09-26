@@ -13,7 +13,7 @@ from neurolayer.experiments.runner import DirtyTreeError, run_experiment
 
 
 def _configs(repo_root: Path) -> list[Path]:
-    return sorted((repo_root / "configs" / "experiments").glob("*.yaml"))
+    return sorted((repo_root / "configs" / "experiments").rglob("*.yaml"))
 
 
 def test_every_config_in_repo_validates(repo_root: Path) -> None:
