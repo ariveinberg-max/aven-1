@@ -1,0 +1,16 @@
+# Leakage control (WP-4.3): B3 trained on within-subject-shuffled labels must score chance at every k.
+name: synthetic-shuffle-b3-r2
+description: Label-shuffle control for the pooled Riemannian baseline, regime R2.
+purpose: benchmark
+datasets: [synthetic_mi, synthetic_mi_shifted]
+synthetic: {n_subjects: 8, n_trials_per_class: 70, signal_to_noise: 0.5, subject_variability: 1.0, seed: 3}
+decoder:
+  name: shuffle_control
+  params:
+    decoder: {name: ts_lr_pooled}
+    seed: 0
+protocol:
+  regime: leave_dataset_out
+  ks: [0, 5, 10, 20, 40]
+  n_unlabeled: 20
+  trial_seconds: 2.0

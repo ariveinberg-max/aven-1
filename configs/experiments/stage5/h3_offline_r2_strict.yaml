@@ -1,0 +1,26 @@
+# Stage 5 experiment (synthetic). See docs/experiments/.
+name: stage5-h3-offline-r2-strict
+description: 'H3 control: strict zero-shot (u=0), offline.'
+purpose: benchmark
+datasets:
+- synthetic_mi
+- synthetic_mi_shifted
+synthetic:
+  n_subjects: 8
+  n_trials_per_class: 70
+  signal_to_noise: 0.5
+  subject_variability: 1.0
+  seed: 3
+decoder:
+  name: nl_spatial_field
+  params: {}
+protocol:
+  regime: leave_dataset_out
+  ks:
+  - 0
+  - 5
+  - 10
+  - 20
+  - 40
+  n_unlabeled: 0
+  trial_seconds: 2.0

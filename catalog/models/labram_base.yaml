@@ -1,0 +1,14 @@
+id: labram_base
+name: LaBraM (base)
+architecture: braindecode:Labram
+source_url: https://github.com/935963004/LaBraM
+citation: Jiang W. et al. Large Brain Model for Learning Generic Representations with Tremendous EEG Data in BCI. ICLR 2024.
+code_license: MIT
+weights:
+  url: null            # TODO(verify): checkpoint location per the LaBraM README
+  sha256: null         # pin after download and review
+  license: LicenseRef-Unknown
+  pretraining_data: [tuh_eeg, "~20 public EEG datasets (~2,500 h) per the paper"]
+  evidence: Code is MIT (repository, read 2026-09-26). Weight terms inherit pretraining-data terms.
+roles: [baseline]
+notes: B6 candidate. Braindecode's Labram needs channel names at forward time.

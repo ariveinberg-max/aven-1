@@ -1,0 +1,17 @@
+# Confound check (analysis montage): which Crown channels carry the proprietary model's signal?
+name: physionet-confound-nl-nonmotor
+description: nl_spatial_field v0 on PhysioNet MI, R1 with only the Crown's nonmotor channels.
+purpose: benchmark
+datasets: [physionet_mi]
+decoder:
+  name: nl_spatial_field
+  params: {device: cpu}
+protocol:
+  regime: within_dataset
+  n_folds: 5
+  target_montage: neurosity_crown_nonmotor
+  ks: [0, 5, 8]
+  n_unlabeled: 10
+  trial_seconds: 2.0
+  min_test_per_class: 10
+  seed: 0

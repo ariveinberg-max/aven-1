@@ -1,0 +1,164 @@
+[project]
+name = "neurolayer"
+dynamic = ["version"]
+description = "Neural intelligence layer: neural signal processing, representation learning and intent decoding."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary. All rights reserved." }
+authors = [{ name = "neurolayer founders" }]
+classifiers = ["Private :: Do Not Upload", "Programming Language :: Python :: 3.12"]
+# Core stays light: everything heavy is an optional extra (ADR-0002).
+dependencies = [
+  "numpy>=2.0",
+  "scipy>=1.13",
+  "scikit-learn>=1.5",
+  "pydantic>=2.7",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+neuro = ["mne>=1.8", "mne-bids>=0.16", "moabb>=1.2", "pyriemann>=0.7"]
+# pyriemann: the proprietary model aligns each subject (representation.alignment).
+dl = ["torch>=2.4", "braindecode>=1.0", "safetensors>=0.4", "pyriemann>=0.7"]
+tracking = ["mlflow>=2.16"]
+api = [
+    "fastapi>=0.115",
+    "pyjwt>=2.8",
+    "uvicorn[standard]>=0.30",
+]
+devices = ["brainflow>=5.12", "pylsl>=1.16"]
+# Upload inspection in the API image (EDF/BDF parsing in the sandboxed worker).
+inspect = ["mne>=1.8"]
+llm = [
+    "anthropic>=1.0",
+]
+
+[project.scripts]
+neurolayer = "neurolayer.cli:main"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "pytest-cov>=5.0",
+  "hypothesis>=6.100",
+  "ruff>=0.6",
+  "mypy>=1.11",
+  "types-PyYAML>=6.0",
+  "import-linter>=2.0",
+  "httpx2>=2.0",
+  "pre-commit>=3.8",
+  "nbstripout>=0.8",
+]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/neurolayer/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/neurolayer", "src/neurolayer_api"]
+
+[tool.uv]
+default-groups = ["dev"]
+
+# ---------------------------------------------------------------- ruff
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests", "scripts"]
+extend-exclude = ["apps", "notebooks"]
+
+[tool.ruff.lint]
+select = [
+  "E", "W", "F",      # pycodestyle / pyflakes
+  "I",                # isort
+  "B",                # bugbear
+  "UP",               # pyupgrade
+  "N",                # naming
+  "SIM",              # simplify
+  "RUF",              # ruff-specific
+  "NPY",              # numpy-specific
+  "PT",               # pytest style
+  "S",                # bandit-style security checks
+  "D",                # docstrings
+]
+ignore = [
+  "D105", "D107",     # magic methods / __init__ docstrings
+  "N803", "N806",     # allow ML-style capital X in args/vars
+  "RUF001", "RUF002", "RUF003",  # allow unicode symbols (×, →) in text
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "D", "PT011"]
+"scripts/**" = ["D", "T201"]
+
+# ---------------------------------------------------------------- mypy
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src", "scripts"]
+plugins = ["pydantic.mypy"]
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["sklearn.*", "scipy.*", "mne.*", "mne_bids.*", "moabb.*", "pyriemann.*", "braindecode.*", "mlflow.*", "brainflow.*", "pylsl.*", "pynput.*", "anthropic.*"]
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------- pytest
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers", "--strict-config", "-m", "not network and not gpu"]
+markers = [
+  "slow: long-running tests (deselect with '-m \"not slow\"')",
+  "network: requires internet access; opt-in only",
+  "gpu: requires a CUDA GPU",
+]
+filterwarnings = [
+  "error",
+  # Third-party: braindecode builds an MNE montage by a deprecated name at import time.
+  "ignore:Montage name 'standard_1020' is deprecated:FutureWarning",
+]
+
+[tool.coverage.run]
+source = ["neurolayer", "neurolayer_api"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "\\.\\.\\."]
+
+# ---------------------------------------------------------------- import-linter (layering, ADR-0002)
+[tool.importlinter]
+root_packages = ["neurolayer", "neurolayer_api"]
+
+[[tool.importlinter.contracts]]
+name = "Core pipeline layering"
+type = "layers"
+layers = [
+  "neurolayer.cli",
+  "neurolayer.devices | neurolayer.experiments",
+  "neurolayer.tracking",
+  "neurolayer.evaluation | neurolayer.models",
+  "neurolayer.representation",
+  "neurolayer.signal",
+  "neurolayer.data",
+  "neurolayer.core",
+]
+
+[[tool.importlinter.contracts]]
+name = "Evaluation harness is independent of concrete models"
+type = "forbidden"
+source_modules = ["neurolayer.evaluation"]
+forbidden_modules = ["neurolayer.models", "neurolayer.representation", "neurolayer.tracking", "neurolayer.experiments", "neurolayer.cli"]
+
+[[tool.importlinter.contracts]]
+name = "Core library never imports the API service"
+type = "forbidden"
+source_modules = ["neurolayer"]
+forbidden_modules = ["neurolayer_api"]

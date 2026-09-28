@@ -1,0 +1,25 @@
+id: meta_emg_generic
+name: Meta generic neuromotor interface sEMG dataset
+version: "2025"
+modality: emg
+paradigms: [gestures, handwriting, wrist]
+n_subjects: 100
+n_channels: null   # verify from the paper
+sfreq_hz: 2000
+labels: []
+source_url: https://github.com/facebookresearch/generic-neuromotor-interface
+citation: >
+  Kaifosh P. et al. (Meta Reality Labs). A generic non-invasive neuromotor interface for
+  human-computer interaction. Nature 645, 702 (2025).
+access: open
+loader: null
+roles: [excluded]
+license:
+  spdx: CC-BY-NC-4.0
+  url: https://github.com/facebookresearch/generic-neuromotor-interface
+  evidence: Repository README states dataset and code are CC-BY-NC-4.0 (read 2026-09-26).
+  commercial_use: "no"
+  derivatives: "yes"
+  verified_by: null
+  verified_on: null
+notes: Non-commercial. Catalogued as excluded so it is never added by accident.

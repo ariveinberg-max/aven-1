@@ -1,0 +1,10 @@
+Copyright (c) 2026 the neurolayer founders (GitHub: ariveinberg-max). All rights reserved.
+
+This repository and its contents are proprietary and confidential. No license, express
+or implied, is granted to use, copy, modify, distribute or create derivative works of
+this software, documentation, models or data, except with prior written permission of
+the copyright holder.
+
+Third-party open-source components retain their own licenses (see uv.lock and
+apps/web/package-lock.json). Third-party datasets are governed by the terms recorded in
+catalog/datasets/.

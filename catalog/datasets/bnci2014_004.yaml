@@ -1,0 +1,23 @@
+id: bnci2014_004
+name: BCI Competition IV dataset 2b (BNCI Horizon 004-2014)
+version: "bnci-004-2014"
+modality: eeg
+paradigms: [motor_imagery]
+n_subjects: 9
+n_channels: 3
+sfreq_hz: 250
+sessions_per_subject: "5"
+labels: [left_hand, right_hand]
+source_url: https://bnci-horizon-2020.eu/database/data-sets
+citation: Tangermann M. et al. Review of the BCI Competition IV. Frontiers in Neuroscience 6:55, 2012.
+access: open
+loader: "moabb:BNCI2014_004"
+roles: [benchmark_only]
+license:
+  spdx: LicenseRef-Unknown
+  evidence: BNCI Horizon terms; not confirmed from the research environment.
+  commercial_use: unclear
+  derivatives: unclear
+  verified_by: null
+  verified_on: null
+notes: Three bipolar channels over C3/Cz/C4 — extreme low-channel stress test.

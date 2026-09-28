@@ -1,0 +1,17 @@
+# Local stack. Run from the repo root: docker compose -f docker/compose.yaml up --build
+# Train a demo bundle first: uv run neurolayer train configs/experiments/models/nl_synthetic_demo.yaml --version 0.1.0
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/api.Dockerfile
+    ports: ["8000:8000"]
+    environment:
+      NEUROLAYER_API_DOCS: "1"
+      NEUROLAYER_AUTH_DISABLED: "1"   # local development only
+      NEUROLAYER_DEMO: "1"            # synthetic demo trials for the dashboard game
+      NEUROLAYER_CORS_ORIGINS: "http://localhost:3000"
+    volumes:
+      - ../artifacts/models:/models:ro
+    read_only: true
+    tmpfs: [/tmp]

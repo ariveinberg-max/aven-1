@@ -1,0 +1,17 @@
+id: reve_base
+name: REVE (base)
+architecture: braindecode:REVE
+source_url: https://huggingface.co/brain-bzh/reve-base
+citation: El Ouahidi Y. et al. REVE - A Foundation Model for EEG. NeurIPS 2025.
+code_license: LicenseRef-REVE
+weights:
+  url: https://huggingface.co/brain-bzh/reve-base
+  sha256: null
+  license: LicenseRef-REVE-NoRedistribution
+  pretraining_data: ["92 datasets, 60k+ hours, 25k subjects"]
+  evidence: >
+    Custom license (reported): no redistribution of weights or derivatives, prohibited
+    biometric identification and profiling, and access revocable if a pretraining dataset
+    becomes restricted.
+roles: [benchmark_reference_only]
+notes: Not usable as a base for shippable models. Benchmark only after legal review of the license.

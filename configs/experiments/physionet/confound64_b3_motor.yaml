@@ -1,0 +1,17 @@
+# Confound check on the full cap (analysis montage): motor strip vs everything else.
+name: physionet-confound64-b3-motor
+description: ts_lr_pooled on PhysioNet MI, R1 with only the motor_strip_21 channels.
+purpose: benchmark
+datasets: [physionet_mi]
+decoder:
+  name: ts_lr_pooled
+  params: {}
+protocol:
+  regime: within_dataset
+  n_folds: 5
+  target_montage: motor_strip_21
+  ks: [0, 5, 8]
+  n_unlabeled: 10
+  trial_seconds: 2.0
+  min_test_per_class: 10
+  seed: 0

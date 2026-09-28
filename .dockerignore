@@ -1,0 +1,15 @@
+.git
+.venv
+**/__pycache__
+.mypy_cache
+.ruff_cache
+.pytest_cache
+.hypothesis
+data
+artifacts
+mlruns
+notebooks
+apps/web/node_modules
+apps/web/.next
+.env
+.env.*

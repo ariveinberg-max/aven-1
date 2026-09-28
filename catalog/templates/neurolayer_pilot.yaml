@@ -1,0 +1,30 @@
+# TEMPLATE for our own pilot recordings (WP-8.3). Not loaded by the catalog: it lives
+# outside catalog/datasets/. Copy it there only after ADR-0012 is accepted and the
+# consent form has passed counsel review (WP-8.2). Access is per participant and per
+# purpose, enforced by the consent ledger, never by this card alone.
+id: neurolayer_pilot
+name: neurolayer pilot recordings (consumer EEG, cued motor imagery)
+version: "0.1"
+modality: eeg
+paradigms: [motor_imagery]
+n_subjects: null            # fill in at each release (target ≥ 20, WP-8.3)
+n_channels: null            # depends on the device chosen in the WP-8.1 memo
+sfreq_hz: null
+sessions_per_subject: "TODO: planned sessions per participant"
+labels: [left_hand, right_hand]
+citation: "neurolayer internal pilot, protocol docs/guides/pilot-protocol.md"
+access: internal
+loader: null                # pilot loader (BIDS under <data-root>/pilot/bids) is a follow-up
+roles: [development]
+license:
+  spdx: LicenseRef-Consent  # NOT LicenseRef-Internal: see ADR-0012
+  evidence: >
+    Per-participant consent ledger (neurolayer consent ...), bound to the SHA-256 of
+    the consent form version each participant signed.
+  commercial_use: unclear   # per participant: only those with commercial_training consent
+  derivatives: unclear
+  verified_by: null         # set when counsel has approved the consent form
+  verified_on: null
+notes: >
+  C3 personal data: keep on encrypted storage, never in git, DVC remotes only if
+  encrypted, never sent to external APIs (including LLMs). Pseudonyms only (P001...).

@@ -1,0 +1,24 @@
+name: Work package
+description: A scoped unit of implementation work (see docs/plan/work-packages.md)
+title: "WP-x.y: "
+labels: [work-package]
+body:
+  - type: input
+    id: wp
+    attributes: { label: Work package id, placeholder: "WP-1.2" }
+    validations: { required: true }
+  - type: textarea
+    id: scope
+    attributes: { label: Scope, description: Exactly what is in scope. }
+    validations: { required: true }
+  - type: textarea
+    id: contracts
+    attributes: { label: Contracts and ADRs touched }
+  - type: textarea
+    id: tests
+    attributes: { label: Tests to add }
+    validations: { required: true }
+  - type: textarea
+    id: acceptance
+    attributes: { label: Acceptance criteria }
+    validations: { required: true }

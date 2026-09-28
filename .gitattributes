@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.bat text eol=crlf
+*.png binary
+*.jpg binary
+*.pdf binary
+uv.lock linguist-generated=true
+apps/web/package-lock.json linguist-generated=true

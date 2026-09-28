@@ -1,0 +1,24 @@
+id: schirrmeister2017
+name: High-Gamma Dataset (Schirrmeister et al. 2017)
+version: "hgd"
+modality: eeg
+paradigms: [motor_execution]
+n_subjects: 14
+n_channels: 128
+sfreq_hz: 500
+sessions_per_subject: "1"
+labels: [left_hand, right_hand, feet, rest]
+citation: >
+  Schirrmeister R.T. et al. Deep learning with convolutional neural networks for EEG decoding
+  and visualization. Human Brain Mapping 38(11), 2017.
+access: open
+loader: "moabb:Schirrmeister2017"
+roles: [unassigned]
+license:
+  spdx: LicenseRef-Unknown
+  evidence: Not confirmed from the research environment.
+  commercial_use: unclear
+  derivatives: unclear
+  verified_by: null
+  verified_on: null
+notes: Executed (not imagined) movements; auxiliary motor data.

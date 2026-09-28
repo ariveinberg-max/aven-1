@@ -1,0 +1,17 @@
+# Confound check on the full cap (analysis montage): motor strip vs everything else.
+name: physionet-confound64-nl-nonmotor
+description: nl_spatial_field on PhysioNet MI, R1 with only the non_motor_43 channels.
+purpose: benchmark
+datasets: [physionet_mi]
+decoder:
+  name: nl_spatial_field
+  params: {device: cpu}
+protocol:
+  regime: within_dataset
+  n_folds: 5
+  target_montage: non_motor_43
+  ks: [0, 5, 8]
+  n_unlabeled: 10
+  trial_seconds: 2.0
+  min_test_per_class: 10
+  seed: 0

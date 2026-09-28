@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python (lint · types · layers · tests · smoke)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      MLFLOW_DISABLE_AGENT_HINT: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install (locked, all extras so neuro/ML tests run too)
+        run: uv sync --locked --extra api --extra neuro --extra dl --extra tracking --extra devices --extra llm
+      - name: Lint
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: Type check (mypy --strict)
+        run: uv run mypy
+      - name: Architecture layering (import-linter)
+        run: uv run lint-imports
+      - name: Tests
+        run: uv run pytest --cov --cov-report=term-missing
+      - name: End-to-end smoke (synthetic CAP-1 harness)
+        run: uv run neurolayer smoke
+      - name: No data or weights tracked in git
+        run: uv run python scripts/check_no_data_files.py --all
+
+  web:
+    name: Web (lint · types · build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+
+  e2e:
+    name: Dashboard end-to-end (Playwright → Next.js → API → model)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install API + model + upload-inspection extras
+        run: uv sync --locked --extra api --extra dl --extra inspect
+      - name: Train the synthetic demo bundle (never shipped)
+        run: uv run neurolayer train configs/experiments/models/nl_synthetic_demo.yaml --version 0.1.0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install web deps and Chromium
+        working-directory: apps/web
+        run: npm ci && npx playwright install --with-deps chromium
+      - name: Playwright
+        working-directory: apps/web
+        run: npm run e2e
+
+  security:
+    name: Security (secrets · dependency audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: astral-sh/setup-uv@v6
+      - name: Python dependency audit (pip-audit)
+        run: |
+          uv export --locked --no-hashes --no-dev --extra api --no-emit-project > requirements-audit.txt
+          # Fully pinned export: audit without re-resolving (--disable-pip --no-deps).
+          uvx pip-audit --strict --disable-pip --no-deps -r requirements-audit.txt
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: npm audit (runtime deps, high+)
+        working-directory: apps/web
+        run: npm audit --omit=dev --audit-level=high
+
+  licenses:
+    name: Dependency licenses (no strong copyleft in runtime deps)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Python runtime dependency licenses
+        run: |
+          uv sync --locked --extra api --extra neuro --extra tracking --extra devices --extra llm
+          uv export --locked --no-hashes --no-dev --extra api --extra neuro --extra tracking --extra devices --extra llm --no-emit-project > runtime-reqs.txt
+          uv run python scripts/license_report.py runtime-reqs.txt
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: npm runtime dependency licenses
+        working-directory: apps/web
+        run: |
+          npm ci
+          npx --yes license-checker --production --summary --failOn "GPL-2.0;GPL-2.0-only;GPL-2.0-or-later;GPL-3.0;GPL-3.0-only;GPL-3.0-or-later;AGPL-3.0;AGPL-3.0-only;AGPL-3.0-or-later;SSPL-1.0"
