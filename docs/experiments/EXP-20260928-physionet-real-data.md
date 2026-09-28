@@ -1,6 +1,6 @@
 # EXP-20260928-physionet-real-data
 
-- **Status:** R1-Crown, confound check and controls done; R1 (64 channels) running. Predictions were committed before any result of the proprietary model existed (commit `f620fa7`), and the confound prediction before its runs (`5c7deb4`).
+- **Status:** R1-Crown, confound check and controls done; R1 (64 channels) running. Predictions were committed before any result of the proprietary model existed (`f620fa7`, 01:24:59 UTC; first model run started 01:52:56). The confound predictions were committed before their runs (`5c7deb4`, `5ffbca0`). Git commit times are the record.
 - **Owner:** agent session, for the repository owner
 - **Work package / hypothesis:** WP-4.2 (baselines, real data), Stage 5 real-data check / H-real-1, H-real-2
 - **Configs:** `configs/experiments/baselines/physionet_b{0..4}_{r1,r1crown}.yaml`, `configs/experiments/physionet/nl_{r1,r1crown}.yaml`
@@ -22,7 +22,7 @@ PhysioNet's roughly 22 trials per class allow budgets k ∈ {0, 5, 8} with ≥ 1
 - **Expected absolute level:** cross-subject left/right imagery on PhysioNet is hard. We expect BA@0 of about 0.55–0.65 for all methods, and a usable-user rate (≥ 70%) below 30% at k = 8.
 - **Falsified if:** `nl_spatial_field` is **worse** than the best baseline by more than 3 pp at k = 0 on R1-Crown, or worse at every budget on both regimes. Then the synthetic results do not carry over, and the Stage 5 model needs rework before any Gate 2 attempt.
 
-## Added before the confound runs (2026-09-28 ~03:25 UTC, after seeing B3, B4 and the model on R1-Crown)
+## Added before the confound runs (committed in `5c7deb4` at 03:20:19 UTC; first confound run started 03:20:35), after seeing B3, B4 and the model on R1-Crown
 EEGNet (B4) scored far above every other method on R1-Crown (BA@0 0.756). In PhysioNet the target appears on the **left or right side of the screen**, so the cue is spatially lateralized. A decoder can separate the classes from eye movements (frontal F5/F6) or lateralized visual responses (parieto-occipital PO3/PO4) without decoding imagined hand movement. EEGNet sees the waveform and is the most likely to exploit this.
 
 - **H-confound (prediction, written before running):** if the lateralized cue drives EEGNet, then EEGNet on the Crown's **non-motor** channels alone (F5, F6, PO3, PO4) reaches BA@0 ≥ 0.65, and the motor-only result (C3, C4, CP3, CP4) is > 5 pp below the full-Crown result. If motor imagery drives it, motor-only stays within 5 pp of full-Crown and non-motor stays < 0.58.
@@ -61,7 +61,7 @@ Paired against B3 (Wilcoxon over 109 subjects, Holm-corrected): **nl_spatial_fie
 
 **H-confound is supported for EEGNet**, on both pre-registered criteria. Non-motor alone reaches 0.719 (≥ 0.65), and motor-only is 7.9 pp below full-Crown (> 5 pp). EEGNet decodes left vs right better from frontal and parieto-occipital sites than from motor cortex. That is the signature of responses to the lateralized on-screen target (eye movements, visuospatial attention), not of imagined hand movement. B3 draws modest, similar signal from both halves. Even "motor only" is not clean: CP3/CP4 are near parietal areas involved in spatial attention. [compare-confound.md](../results/physionet/compare-confound.md).
 
-### Confound check for the proprietary model (prediction written before running, 2026-09-28 ~04:25 UTC)
+### Confound check for the proprietary model (prediction committed in `5ffbca0` at 04:21:53 UTC; runs started 04:22:05)
 - **H-confound-nl:** the proprietary model uses band power through position-based spatial filters, as B3 uses covariances. Prediction: it depends on the cue about as little as B3 does. Non-motor-only BA@0 < 0.62, and motor-only BA@0 within 5 pp of its non-motor-only value. If non-motor-only ≥ 0.65, the model's Crown result is cue-driven too.
 
 ### R1: new people, 64 channels
