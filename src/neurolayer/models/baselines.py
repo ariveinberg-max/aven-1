@@ -13,6 +13,7 @@ which scores exactly chance in balanced accuracy, as the protocol intends.
 
 from __future__ import annotations
 
+import copy
 from typing import Any, Self
 
 import numpy as np
@@ -135,12 +136,25 @@ class PooledRiemannianDecoder:
         self._target_channels: tuple[str, ...] | None = None
         self._cal_covs: FloatArray | None = None
         self._cal_y: IntArray | None = None
+        # Source features per channel subset. They depend only on the fitted source
+        # covariances, so every per-target copy shares one cache (see __deepcopy__).
+        self._feature_cache: dict[tuple[int, ...], tuple[FloatArray, FloatArray]] = {}
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> PooledRiemannianDecoder:
+        """Deep-copy per-target state; share the (read-only) source feature cache."""
+        clone = self.__class__.__new__(self.__class__)
+        memo[id(self)] = clone
+        for key, value in self.__dict__.items():
+            shared = key == "_feature_cache"
+            setattr(clone, key, value if shared else copy.deepcopy(value, memo))
+        return clone
 
     def fit(self, source: EpochSet) -> None:
         """Estimate source covariances once; features are built per target montage."""
         self._channels = source.ch_names
         self._covs = covariances(source.X, self.estimator)
         self._y = source.y.copy()
+        self._feature_cache = {}  # a new fit invalidates cached source features
         self._groups = [
             np.flatnonzero((source.dataset == d) & (source.subject == s)).astype(np.int64)
             for d, s in source.subject_keys()
@@ -164,17 +178,34 @@ class PooledRiemannianDecoder:
             return tangent_vectors(recenter(covs, reference), np.eye(covs.shape[1]))
         return tangent_vectors(covs, reference)
 
-    def predict(self, epochs: EpochSet) -> IntArray:
-        """Build montage-specific features, fit the classifier, predict the target."""
-        if self._covs is None or self._y is None or self._channels is None:
-            raise RuntimeError("PooledRiemannianDecoder.predict called before fit")
-        idx = channel_indices(self._channels, epochs.ch_names, "target vs source montage")
-        source_covs = self._covs[:, idx][:, :, idx]
+    def _source_features(self, idx: tuple[int, ...]) -> tuple[FloatArray, FloatArray]:
+        """Source tangent features and the global source mean for a channel subset (cached).
+
+        Computing the per-subject Riemannian means dominated prediction time (about 90 %
+        with 64 channels), and they are identical for every target of a fold.
+        """
+        cached = self._feature_cache.get(idx)
+        if cached is not None:
+            return cached
+        if self._covs is None:
+            raise RuntimeError("PooledRiemannianDecoder used before fit")
+        source_covs = self._covs[:, list(idx)][:, :, list(idx)]
         global_ref = mean_covariance(source_covs)
         source_feats = np.empty((len(source_covs), len(idx) * (len(idx) + 1) // 2))
         for group in self._groups:
             ref = mean_covariance(source_covs[group]) if self.recenter_subjects else global_ref
             source_feats[group] = self._features(source_covs[group], ref)
+        source_feats.flags.writeable = False
+        global_ref.flags.writeable = False
+        self._feature_cache[idx] = (source_feats, global_ref)
+        return source_feats, global_ref
+
+    def predict(self, epochs: EpochSet) -> IntArray:
+        """Build montage-specific features, fit the classifier, predict the target."""
+        if self._covs is None or self._y is None or self._channels is None:
+            raise RuntimeError("PooledRiemannianDecoder.predict called before fit")
+        idx = channel_indices(self._channels, epochs.ch_names, "target vs source montage")
+        source_feats, global_ref = self._source_features(tuple(int(i) for i in idx))
 
         if self._target_covs is not None:
             if self._target_channels != epochs.ch_names:

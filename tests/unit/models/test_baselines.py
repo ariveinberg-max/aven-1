@@ -98,3 +98,32 @@ def test_braindecode_eegnet_runs_and_guards_montage(easy) -> None:  # type: igno
     assert set(same) == {0, 5, 20}
     with pytest.raises(ValueError, match="model_card"):
         make_factory("braindecode", params | {"weights": "w.safetensors"})().fit(easy)
+
+
+def test_pooled_riemannian_cache_is_shared_and_changes_nothing(epochs) -> None:  # type: ignore[no-untyped-def]
+    """The source-feature cache is a pure speed-up: identical predictions, shared by copies."""
+    import copy
+
+    from neurolayer.models.baselines import PooledRiemannianDecoder
+
+    subjects = sorted(set(epochs.subject))
+    source = epochs.subset(np.isin(epochs.subject, subjects[:4]))
+    target = epochs.subset(epochs.subject == subjects[5])
+    calibration, test = target.subset(np.arange(10)), target.subset(np.arange(20, 60))
+
+    fitted = PooledRiemannianDecoder()
+    fitted.fit(source)
+    first = copy.deepcopy(fitted).adapt(calibration, None)
+    expected = first.predict(test.without_labels())  # fills the shared cache
+    assert fitted._feature_cache  # the copy wrote into the cache shared with the original
+    second = copy.deepcopy(fitted).adapt(calibration, None)
+    assert second._feature_cache is fitted._feature_cache
+    np.testing.assert_array_equal(second.predict(test.without_labels()), expected)
+
+    uncached = PooledRiemannianDecoder()
+    uncached.fit(source)
+    np.testing.assert_array_equal(
+        uncached.adapt(calibration, None).predict(test.without_labels()), expected
+    )
+    uncached.fit(source)
+    assert uncached._feature_cache == {}  # refitting invalidates the cache
