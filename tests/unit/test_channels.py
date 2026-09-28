@@ -66,3 +66,12 @@ def test_montage_validation() -> None:
         Montage(name="bad", channels=("C3", "FCZ"), kind="research", description="")
     with pytest.raises(ValueError, match="duplicate"):
         Montage(name="dup", channels=("C3", "C3"), kind="research", description="")
+
+
+def test_analysis_montages_split_the_crown() -> None:
+    crown = set(CONSUMER_MONTAGES["neurosity_crown"].channels)
+    motor = CONSUMER_MONTAGES["neurosity_crown_motor"]
+    nonmotor = CONSUMER_MONTAGES["neurosity_crown_nonmotor"]
+    assert motor.kind == nonmotor.kind == "analysis"
+    assert set(motor.channels) | set(nonmotor.channels) == crown
+    assert not set(motor.channels) & set(nonmotor.channels)

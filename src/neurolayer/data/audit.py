@@ -85,6 +85,7 @@ def audit_dataset(
         montage_missing={
             name: tuple(c for c in montage.channels if c not in common)
             for name, montage in CONSUMER_MONTAGES.items()
+            if montage.kind != "analysis"
         },
         subjects=tuple(
             SubjectSummary(

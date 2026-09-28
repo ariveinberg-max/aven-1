@@ -149,14 +149,15 @@ class Montage:
     kind
         ``"device"`` for a shipping product's fixed layout, ``"recommended"`` for a
         placement we recommend on configurable hardware, ``"research"`` for a dataset
-        layout used as a stress test.
+        layout used as a stress test, ``"analysis"`` for a channel subset used only to
+        attribute decoding performance (never a product target).
     description
         Human-readable notes, including where the layout comes from.
     """
 
     name: str
     channels: tuple[str, ...]
-    kind: Literal["device", "recommended", "research"]
+    kind: Literal["device", "recommended", "research", "analysis"]
     description: str
 
     def __post_init__(self) -> None:
@@ -223,6 +224,21 @@ CONSUMER_MONTAGES: dict[str, Montage] = {
             kind="research",
             description="Three-channel layout of BCI Competition IV 2b; extreme low-channel "
             "stress test.",
+        ),
+        Montage(
+            name="neurosity_crown_motor",
+            channels=("CP3", "C3", "C4", "CP4"),
+            kind="analysis",
+            description="The Crown's four sensorimotor sites. Confound check: what a decoder "
+            "gets from motor cortex alone.",
+        ),
+        Montage(
+            name="neurosity_crown_nonmotor",
+            channels=("F5", "PO3", "PO4", "F6"),
+            kind="analysis",
+            description="The Crown's frontal and parieto-occipital sites. Confound check: "
+            "left/right decoding here suggests eye-movement or visual responses to a "
+            "lateralized cue rather than motor imagery.",
         ),
     )
 }
