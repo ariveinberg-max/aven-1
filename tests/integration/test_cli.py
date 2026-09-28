@@ -25,6 +25,7 @@ def test_catalog_check_exit_codes(catalog_dir: Path, capsys: pytest.CaptureFixtu
 def test_run_and_smoke(
     repo_root: Path,
     catalog_dir: Path,
+    unverified_catalog: Path,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
@@ -35,6 +36,7 @@ def test_run_and_smoke(
     out = capsys.readouterr().out
     assert "AUCEC" in out
     assert "mean BA" in out
-    blocked = main([*base, "run", "configs/experiments/cap1_r1_physionet_template.yaml"])
+    unverified = ["--catalog", str(unverified_catalog), "--output", str(tmp_path)]
+    blocked = main([*unverified, "run", "configs/experiments/cap1_r1_physionet_template.yaml"])
     assert blocked == 2
     assert "license gate" in capsys.readouterr().err

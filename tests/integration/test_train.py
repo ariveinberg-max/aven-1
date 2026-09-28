@@ -43,11 +43,11 @@ def test_train_exports_bundle(
 
 
 def test_train_requires_training_license(
-    catalog_dir: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    unverified_catalog: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     cmd = [
         "--catalog",
-        str(catalog_dir),
+        str(unverified_catalog),
         "train",
         str(_config(tmp_path, "[physionet_mi]")),
         "--version",

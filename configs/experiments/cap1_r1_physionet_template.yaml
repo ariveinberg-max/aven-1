@@ -1,5 +1,6 @@
-# TEMPLATE, blocked on WP-1.2 (PhysioNet adapter) and WP-1.1 (license verification).
-# Running it today fails loudly at the license gate, which is intended.
+# Reference-decoder pipeline check on PhysioNet MI (license verified 2026-09-28).
+# Needs the data locally: uv run python scripts/fetch_physionet_mirror.py, then
+# uv run neurolayer data fetch physionet_mi --no-bids.
 name: cap1-r1-physionet-logvar
 description: CAP-1 regime R1 on PhysioNet MI with the reference decoder (pipeline check, not a baseline).
 purpose: benchmark

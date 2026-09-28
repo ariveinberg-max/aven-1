@@ -62,7 +62,7 @@ def test_report_probe_and_control_commands(
 
 
 def test_gate0_refuses_unverified_license(
-    catalog_dir: Path, capsys: pytest.CaptureFixture[str]
+    unverified_catalog: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    assert main(["--catalog", str(catalog_dir), "gate0", "physionet_mi"]) == 2
+    assert main(["--catalog", str(unverified_catalog), "gate0", "physionet_mi"]) == 2
     assert "license gate" in capsys.readouterr().err

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
+import yaml
 
 from neurolayer.core.types import EpochSet
 from neurolayer.data.synthetic import SyntheticMIConfig, SyntheticMIResult, generate_synthetic_mi
@@ -29,3 +31,20 @@ def synthetic() -> SyntheticMIResult:
 @pytest.fixture(scope="session")
 def epochs(synthetic: SyntheticMIResult) -> EpochSet:
     return synthetic.epochs
+
+
+@pytest.fixture
+def unverified_catalog(tmp_path: Path) -> Path:
+    """Copy of the catalog in which ``physionet_mi``'s license is not yet verified.
+
+    License-gate tests use it so they do not depend on which real datasets a human
+    has verified so far.
+    """
+    target = tmp_path / "catalog"
+    shutil.copytree(REPO_ROOT / "catalog" / "datasets", target)
+    card = target / "physionet_mi.yaml"
+    raw = yaml.safe_load(card.read_text(encoding="utf-8"))
+    raw["license"]["verified_by"] = None
+    raw["license"]["verified_on"] = None
+    card.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    return target

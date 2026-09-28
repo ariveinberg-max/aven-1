@@ -107,10 +107,15 @@ class TestRepositoryCatalog:
         assert not evaluate_usage(catalog["meta_emg_generic"], Purpose.EXPLORATION).allowed
         # No-derivatives BCI IV 2a must never be trained on.
         assert not evaluate_usage(catalog["bnci2014_001"], Purpose.TRAINING).allowed
-        # Nothing public is usable beyond exploration until a human verifies it (WP-1.1).
+        # Public data is usable for training only after a human verified a license that
+        # permits commercial use and derivatives (WP-1.1).
         for card in catalog.values():
-            if not card.is_internal:
-                assert not evaluate_usage(card, Purpose.TRAINING).allowed, card.id
+            if not card.is_internal and evaluate_usage(card, Purpose.TRAINING).allowed:
+                assert card.license.is_verified, card.id
+                assert card.license.commercial_use == "yes", card.id
+                assert card.license.derivatives == "yes", card.id
+        # Verified by the repository owner on 2026-09-28 (ODC-By 1.0).
+        assert evaluate_usage(catalog["physionet_mi"], Purpose.TRAINING).allowed
 
     def test_select_cards_unknown(self, catalog_dir: Path) -> None:
         with pytest.raises(KeyError, match="nope"):

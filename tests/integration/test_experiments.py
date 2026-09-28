@@ -72,13 +72,15 @@ def test_same_config_same_hash_same_scores(
 
 
 def test_license_gate_blocks_unverified_public_data(
-    repo_root: Path, catalog_dir: Path, tmp_path: Path
+    repo_root: Path, unverified_catalog: Path, tmp_path: Path
 ) -> None:
     config = load_experiment_config(
         repo_root / "configs/experiments/cap1_r1_physionet_template.yaml"
     )
     with pytest.raises(LicenseGateError, match="physionet_mi"):
-        run_experiment(config, catalog_dir=catalog_dir, output_dir=tmp_path, repo_root=repo_root)
+        run_experiment(
+            config, catalog_dir=unverified_catalog, output_dir=tmp_path, repo_root=repo_root
+        )
 
 
 def test_official_run_requires_git_repository(
