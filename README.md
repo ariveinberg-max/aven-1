@@ -117,7 +117,7 @@ data/, artifacts/    git-ignored: datasets (DVC) and run outputs
 |------|-----|-------|
 | Make the repo private; branch protection; 2FA (WP-0.8) | Proprietary IP is in a public repo | [security §4](docs/architecture/security-and-privacy.md) |
 | Verify dataset licenses (WP-1.1) | Blocks benchmark/training use of every public dataset, and therefore Gates 0–2 | `catalog/datasets/*.yaml` (`license` blocks; humans only) |
-| Allow network access to data hosts, then `neurolayer data fetch` | This environment cannot download datasets | physionet.org, openneuro.org, zenodo.org, figshare.com, bnci-horizon-2020.eu, bbci.de, huggingface.co |
+| Allow network access to data hosts, then `neurolayer data fetch` | Cloud sessions here cannot reach them. PhysioNet MI already works through its official AWS mirror (`scripts/fetch_physionet_mirror.py`) | openneuro.org, zenodo.org, figshare.com, gigadb.org (ftp.cngb.org), bnci-horizon-2020.eu, bbci.de, huggingface.co |
 | Choose the locked holdout (ADR-0009) and fix Gate 2 margins (ADR-0011) | Must be decided on real audits and baselines, before any proprietary run on the holdout | [ADR-0009](docs/adr/0009-locked-holdout-selection.md), [ADR-0011](docs/adr/0011-cap1-gate1-thresholds.md) |
 | Pin pretrained weights (B5/B6) | Hashes must come from a reviewed download | `catalog/models/*.yaml` |
 | Counsel review of the consent form; accept ADR-0012 | Required before any participant and before training on our own data | [consent form](docs/templates/consent-form.md), [ADR-0012](docs/adr/0012-consent-aware-gate-for-own-data.md) |

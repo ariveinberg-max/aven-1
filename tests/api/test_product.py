@@ -206,3 +206,20 @@ def test_bridge_unknown_model_opens_no_session(models_dir: Path) -> None:
             print,
             realtime=False,
         )
+
+
+# ----------------------------------------------------------------------------- warm-up
+def test_startup_warms_up_models_and_demo(models_dir: Path) -> None:
+    app = create_app(Settings(models_dir=models_dir, auth_disabled=True, demo_enabled=True))
+    with TestClient(app) as client:  # the context manager runs the lifespan
+        timings = client.app.state.warmup  # type: ignore[attr-defined]
+        assert set(timings) == {MODEL, "demo_generator"}
+        assert all(seconds >= 0 for seconds in timings.values())
+        assert MODEL in app.state.registry._cache  # loaded once, reused by requests
+
+
+def test_warmup_can_be_disabled(models_dir: Path) -> None:
+    app = create_app(Settings(models_dir=models_dir, auth_disabled=True, warmup=False))
+    with TestClient(app):
+        assert app.state.warmup == {}
+        assert app.state.registry._cache == {}

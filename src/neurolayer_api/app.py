@@ -29,7 +29,8 @@ import subprocess
 import sys
 import tempfile
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -48,6 +49,7 @@ from neurolayer_api.models import LoadedModel, ModelRegistry
 from neurolayer_api.security import AuthError, Principal, RateLimiter, bearer, principal_from_token
 from neurolayer_api.sessions import Session, SessionStore
 from neurolayer_api.settings import Settings
+from neurolayer_api.warmup import warm_up
 
 audit = logging.getLogger("neurolayer_api.audit")
 
@@ -317,14 +319,24 @@ def create_app(settings: Settings | None = None, *, enable_docs: bool | None = N
         raise ValueError("NEUROLAYER_JWT_SECRET must be at least 32 bytes (RFC 7518 §3.2)")
     docs = settings.enable_docs if enable_docs is None else enable_docs
     _configure_audit_logging()
+    registry = ModelRegistry(settings.models_dir)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        if settings.warmup:
+            app.state.warmup = await run_in_threadpool(warm_up, registry, settings.demo_enabled)
+            audit.info(json.dumps({"event": "warmup", "seconds": app.state.warmup}))
+        yield
+
     app = FastAPI(
         title="neurolayer API",
         version=__version__,
         docs_url="/docs" if docs else None,
         redoc_url=None,
         openapi_url="/openapi.json" if docs else None,
+        lifespan=lifespan,
     )
-    registry = ModelRegistry(settings.models_dir)
+    app.state.warmup = {}
     store = SessionStore(settings.session_ttl_s)
     limiter = RateLimiter(settings.rate_limit_per_minute)
     app.state.registry, app.state.sessions, app.state.settings = registry, store, settings

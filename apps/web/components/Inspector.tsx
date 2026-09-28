@@ -11,7 +11,9 @@ import { api, type InspectReport } from "@/lib/api";
 const MAX_BYTES = 8 * 1024 * 1024; // matches the API's default request-size limit
 
 function fmt(value: number | null, digits = 1): string {
-  return value === null ? "–" : value.toFixed(digits);
+  if (value === null) return "–";
+  const rounded = Number(value.toFixed(digits));
+  return (rounded === 0 ? 0 : rounded).toFixed(digits); // never show "-0.0"
 }
 
 export function Inspector() {

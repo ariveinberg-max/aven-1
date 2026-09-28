@@ -39,6 +39,9 @@ class Settings:
         Serve synthetic demo trials (``/v1/demo/trials``) for the dashboard game.
     inspect_timeout_s
         Wall-clock limit of the sandboxed file-inspection worker.
+    warmup
+        Load every model and run one forward pass at startup, so the first user
+        request is as fast as later ones.
     """
 
     models_dir: Path = Path("artifacts/models")
@@ -52,6 +55,7 @@ class Settings:
     cors_origins: tuple[str, ...] = ("http://localhost:3000",)
     demo_enabled: bool = False
     inspect_timeout_s: float = 30.0
+    warmup: bool = True
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
@@ -70,4 +74,5 @@ class Settings:
             cors_origins=tuple(o.strip() for o in origins.split(",") if o.strip()),
             demo_enabled=_flag(env, "NEUROLAYER_DEMO"),
             inspect_timeout_s=float(env.get("NEUROLAYER_INSPECT_TIMEOUT_S", "30")),
+            warmup=_flag(env, "NEUROLAYER_WARMUP", default=True),
         )
