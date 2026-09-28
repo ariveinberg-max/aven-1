@@ -2835,6 +2835,7 @@ devices = [
 ]
 dl = [
     { name = "braindecode" },
+    { name = "pyriemann" },
     { name = "safetensors" },
     { name = "torch" },
 ]
@@ -2883,6 +2884,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pyjwt", marker = "extra == 'api'", specifier = ">=2.8" },
     { name = "pylsl", marker = "extra == 'devices'", specifier = ">=1.16" },
+    { name = "pyriemann", marker = "extra == 'dl'", specifier = ">=0.7" },
     { name = "pyriemann", marker = "extra == 'neuro'", specifier = ">=0.7" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "safetensors", marker = "extra == 'dl'", specifier = ">=0.4" },

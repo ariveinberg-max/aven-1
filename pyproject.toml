@@ -18,7 +18,8 @@ dependencies = [
 
 [project.optional-dependencies]
 neuro = ["mne>=1.8", "mne-bids>=0.16", "moabb>=1.2", "pyriemann>=0.7"]
-dl = ["torch>=2.4", "braindecode>=1.0", "safetensors>=0.4"]
+# pyriemann: the proprietary model aligns each subject (representation.alignment).
+dl = ["torch>=2.4", "braindecode>=1.0", "safetensors>=0.4", "pyriemann>=0.7"]
 tracking = ["mlflow>=2.16"]
 api = [
     "fastapi>=0.115",
