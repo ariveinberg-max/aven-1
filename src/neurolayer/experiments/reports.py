@@ -45,6 +45,10 @@ def load_run(run_dir: Path) -> LoadedRun:
     label = decoder.get("name", "?") + (
         f" ({params.get('architecture')})" if "architecture" in params else ""
     )
+    # Channel ablations run the same decoder on different montages; say which one.
+    target_montage = manifest["config"].get("protocol", {}).get("target_montage")
+    if target_montage:
+        label += f" · {target_montage}"
     return LoadedRun(
         run_id=manifest["run_id"],
         label=label,

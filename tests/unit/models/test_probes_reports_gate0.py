@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -70,6 +71,26 @@ def test_comparison_report_and_plot(catalog_dir: Path, repo_root: Path, tmp_path
     assert "exploratory" in report  # non-official runs are labeled as such
     svg = plot_curves(runs, tmp_path / "curves.svg")
     assert svg.read_text().startswith("<?xml")
+
+
+def test_run_label_names_the_target_montage(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    config = {
+        "decoder": {"name": "braindecode", "params": {"architecture": "EEGNet"}},
+        "protocol": {"target_montage": "neurosity_crown_motor"},
+    }
+    (run_dir / "manifest.json").write_text(
+        json.dumps({"run_id": "r", "official": True, "config": config})
+    )
+    (run_dir / "summary.json").write_text(json.dumps({"per_budget": []}))
+    (run_dir / "results.csv").write_text("dataset,subject,k,balanced_accuracy\n")
+    assert load_run(run_dir).label == "braindecode (EEGNet) · neurosity_crown_motor"
+    config["protocol"] = {"target_montage": None}
+    (run_dir / "manifest.json").write_text(
+        json.dumps({"run_id": "r", "official": True, "config": config})
+    )
+    assert load_run(run_dir).label == "braindecode (EEGNet)"
 
 
 def test_within_session_auc_and_compare() -> None:
