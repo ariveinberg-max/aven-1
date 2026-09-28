@@ -75,3 +75,13 @@ def test_analysis_montages_split_the_crown() -> None:
     assert motor.kind == nonmotor.kind == "analysis"
     assert set(motor.channels) | set(nonmotor.channels) == crown
     assert not set(motor.channels) & set(nonmotor.channels)
+
+
+def test_full_cap_analysis_montages_are_disjoint() -> None:
+    motor = set(CONSUMER_MONTAGES["motor_strip_21"].channels)
+    other = set(CONSUMER_MONTAGES["non_motor_43"].channels)
+    assert len(motor) == 21
+    assert len(other) == 43
+    assert not motor & other
+    assert {"C3", "Cz", "C4"} <= motor
+    assert {"Fp1", "O1", "PO3"} <= other

@@ -64,6 +64,10 @@ Paired against B3 (Wilcoxon over 109 subjects, Holm-corrected): **nl_spatial_fie
 ### Confound check for the proprietary model (prediction committed in `5ffbca0` at 04:21:53 UTC; runs started 04:22:05)
 - **H-confound-nl:** the proprietary model uses band power through position-based spatial filters, as B3 uses covariances. Prediction: it depends on the cue about as little as B3 does. Non-motor-only BA@0 < 0.62, and motor-only BA@0 within 5 pp of its non-motor-only value. If non-motor-only ≥ 0.65, the model's Crown result is cue-driven too.
 
+### Confound check on the full cap (prediction committed before running; see git history of this line)
+On 64 channels the proprietary model beat B3 by +9.1 pp at k = 0 (p = 2e-10). That is the opposite of H-real-2, which predicted a smaller gap. A full cap includes frontal and occipital sites where the lateralized cue shows up, so the gain could be cue-driven.
+- **H-confound-64 (prediction):** if the gain is motor-driven, the model restricted to the 21-channel sensorimotor strip (FC/C/CP rows) keeps ≥ +5 pp over B3 on the same channels at k = 0. If it is cue-driven, the model on the other 43 channels alone reaches BA@0 ≥ 0.65 and beats its own motor-strip result.
+
 ### R1: new people, 64 channels
 *Running.*
 
