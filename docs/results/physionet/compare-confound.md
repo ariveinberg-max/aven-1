@@ -8,5 +8,8 @@
 | `20260928T031833Z-physionet-b4-r1crown-179f8a` | braindecode (EEGNet) | 0.756 [0.73, 0.78] | 0.760 [0.74, 0.78] | 0.763 [0.74, 0.79] | 0.64 | 0.759 | 0 |
 | `20260928T033322Z-physionet-confound-b4-motor-2f386f` | braindecode (EEGNet) | 0.677 [0.65, 0.70] | 0.684 [0.66, 0.71] | 0.689 [0.66, 0.71] | 0.50 | 0.682 | 5 |
 | `20260928T032637Z-physionet-confound-b4-nonmotor-ab72a4` | braindecode (EEGNet) | 0.719 [0.70, 0.74] | 0.718 [0.70, 0.74] | 0.722 [0.70, 0.75] | 0.59 | 0.719 | 0 |
+| `20260928T031229Z-physionet-nl-r1crown-a8d4e7` | nl_spatial_field | 0.645 [0.62, 0.67] | 0.618 [0.59, 0.64] | 0.630 [0.60, 0.66] | 0.31 | 0.630 | never |
+| `20260928T044616Z-physionet-confound-nl-motor-876885` | nl_spatial_field | 0.590 [0.57, 0.62] | 0.568 [0.55, 0.59] | 0.589 [0.56, 0.61] | 0.17 | 0.579 | never |
+| `20260928T043401Z-physionet-confound-nl-nonmotor-f52ac1` | nl_spatial_field | 0.587 [0.57, 0.61] | 0.577 [0.56, 0.60] | 0.591 [0.57, 0.61] | 0.15 | 0.582 | never |
 
 ![Calibration-efficiency curves](cec-confound.svg)

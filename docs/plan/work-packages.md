@@ -146,7 +146,7 @@ Legend: ✅ done · 🔜 next · ⏳ blocked by dependency · 👤 human task
 - **Scope:** bad-channel detection, amplitude/variance epoch rejection (thresholds in config, report counts), and optional EOG regression when EOG is available. Every rejection is counted in the QA output.
 - **Tests:** injected artifacts are rejected; clean epochs are kept.
 
-### WP-2.6: Processed cache + Gate 0 ✅ cache · Gate 0 tooling in Stage 4 · ⏳ Gate 0 run needs data
+### WP-2.6: Processed cache + Gate 0 ✅ cache · ✅ Gate 0 on PhysioNet (40 subjects) · ⏳ Cho2017/Lee2019
 - **Done:** content-addressed per-subject cache (`save_epochs`/`load_epochs_file`, pickle-free) used by `build_epochs`. Experiment configs now carry `pipeline` and `max_subjects`, and manifests record `pipeline_hash` (manifest v2).
 - **Scope:** write and read `data/processed/<pipeline_hash>/<dataset>/sub-XXX_epochs.npz` + `.json`. Then reproduce MOABB within-session CSP+LDA and TS+LR on PhysioNet, Cho2017 and Lee2019 with the same pipeline.
 - **Accept when (Gate 0):** mean accuracy within ±3 pp of MOABB's published numbers. Results are recorded in the results ledger with official run ids.
@@ -203,7 +203,7 @@ Legend: ✅ done · 🔜 next · ⏳ blocked by dependency · 👤 human task
 - **Scope:** implement the baselines in [CAP-1 §4](../product/cap-1-calibration-efficient-intent.md#4-baseline-suite-must-be-reproduced-before-any-proprietary-claim), each registered in `models/registry.py` with an experiment config per regime (R0–R3).
 - **Tests:** each decoder passes the harness contract tests (`tests/unit/test_protocol.py` patterns: no label peeking, deterministic given seed).
 
-### WP-4.2: Baseline report and CAP-1 thresholds ✅ tooling · ⏳ real data
+### WP-4.2: Baseline report and CAP-1 thresholds ✅ tooling · ✅ PhysioNet baselines (R1, R1-Crown) · ⏳ central-cue datasets
 - **Done:** `neurolayer report compare` (paired Wilcoxon + Holm, CIs, UUR, AUCEC, TTC, SVG curves). A synthetic demonstration is in `docs/results/synthetic/`. ADR-0011 fixes the threshold procedure; the numbers wait for real runs.
 - **Scope:** official runs of B0–B6 × R0–R3 on the development pool, plus `docs/results/gate-1-baselines.md`. It contains:
   - CEC plots
@@ -223,7 +223,7 @@ Legend: ✅ done · 🔜 next · ⏳ blocked by dependency · 👤 human task
 
 ## Stage 5: Proprietary model (Gate 2)
 
-**Status:** v0 built and studied on synthetic data ✅ · ⏳ real-data evaluation (needs Stage 1 data + WP-1.1).
+**Status:** v0 built and studied on synthetic data ✅ · first real-data comparison on PhysioNet ✅ ([EXP-20260928-physionet-real-data](../experiments/EXP-20260928-physionet-real-data.md)): +2.5 to +3.6 pp over B3 on the sensorimotor strip (significant), no significant gain on the Crown montage, and the dataset is cue-confounded · ⏳ central-cue datasets, controls on the model's features, v1.
 
 - **Model:** `nl_spatial_field` (`neurolayer.models.proprietary.SpatialFieldDecoder`, network in `neurolayer.representation.spatial_field`). Spatial filters are a learned function of **scalp position**, so it runs on any montage with known electrode positions. It adds per-subject Euclidean alignment, channel-dropout training, head fine-tuning on calibration, and optional causal online alignment.
 - **Synthetic results** (`docs/results/synthetic/stage5-*.md`), paired vs B3: +10–12 pp at every budget on R3 and +5–6 pp at k ≤ 5 on R2. Multi-seed shuffle control passes.

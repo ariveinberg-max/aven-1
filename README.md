@@ -27,7 +27,16 @@ Our first measurable capability is **[CAP-1](docs/product/cap-1-calibration-effi
 
 ## What is in the repo today
 
-Everything below runs end to end on **synthetic data** and is covered by tests. **No capability claim yet.** Every exit gate from Gate 0 on needs real data (waiting on license verification, WP-1.1) or hardware and participants (Gate 3). See the [human and hardware checklist](#what-needs-a-human-or-hardware).
+Everything below runs end to end and is covered by tests (synthetic data in tests). **No CAP-1 capability claim yet.**
+
+**First real data (2026-09-28): PhysioNet EEG Motor Movement/Imagery, 109 people** ([experiment card](docs/experiments/EXP-20260928-physionet-real-data.md), [ledger](docs/results/README.md)):
+
+- **Gate 0 passed:** our CSP+LDA and TS+LR reproduce MOABB's reference numbers within 0.01 AUC on 40 subjects ([report](docs/results/gate0-physionet.md)).
+- **New people, Neurosity Crown's 8 sites:** the model is +1.9 pp over the strongest classical baseline (B3) at zero calibration, not significant (p = 0.11).
+- **New people, 21-channel motor strip:** +2.5 to +3.6 pp over B3, significant at every budget (p ≤ 0.036). This is the first confound-controlled advantage on real EEG: modest, one dataset.
+- **PhysioNet is cue-confounded:** EEGNet's higher score (0.76) comes largely from non-motor sites that see where the on-screen target is. No motor-intent claim should rest on this dataset. Its ~22 trials per class also cannot test calibration efficiency.
+
+Gates 1–2 need the other development datasets (license verification, WP-1.1, and network access) and Gate 3 needs hardware and participants. See the [human and hardware checklist](#what-needs-a-human-or-hardware).
 
 | Stage | What exists | Where |
 |-------|-------------|-------|
@@ -116,7 +125,7 @@ data/, artifacts/    git-ignored: datasets (DVC) and run outputs
 | Item | Why | Where |
 |------|-----|-------|
 | Make the repo private; branch protection; 2FA (WP-0.8) | Proprietary IP is in a public repo | [security §4](docs/architecture/security-and-privacy.md) |
-| Verify dataset licenses (WP-1.1) | Blocks benchmark/training use of every public dataset, and therefore Gates 0–2 | `catalog/datasets/*.yaml` (`license` blocks; humans only) |
+| Verify the remaining dataset licenses (WP-1.1) | PhysioNet MI is verified (ODC-By 1.0, by the owner). Cho2017, Lee2019 and BNCI 2014-001 still block Gates 1–2 | `catalog/datasets/*.yaml` (`license` blocks; humans only) |
 | Allow network access to data hosts, then `neurolayer data fetch` | Cloud sessions here cannot reach them. PhysioNet MI already works through its official AWS mirror (`scripts/fetch_physionet_mirror.py`) | openneuro.org, zenodo.org, figshare.com, gigadb.org (ftp.cngb.org), bnci-horizon-2020.eu, bbci.de, huggingface.co |
 | Choose the locked holdout (ADR-0009) and fix Gate 2 margins (ADR-0011) | Must be decided on real audits and baselines, before any proprietary run on the holdout | [ADR-0009](docs/adr/0009-locked-holdout-selection.md), [ADR-0011](docs/adr/0011-cap1-gate1-thresholds.md) |
 | Pin pretrained weights (B5/B6) | Hashes must come from a reviewed download | `catalog/models/*.yaml` |
