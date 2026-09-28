@@ -1,0 +1,16 @@
+# Proprietary spatial-field decoder v0 on real data (PhysioNet MI only; exploratory, not Gate 2).
+name: physionet-nl-r1
+description: Spatial-field decoder v0 on PhysioNet MI, regime R1 (same protocol as physionet_b*_r1).
+purpose: benchmark
+datasets: [physionet_mi]
+decoder:
+  name: nl_spatial_field
+  params: {device: cpu}
+protocol:
+  regime: within_dataset
+  n_folds: 5
+  ks: [0, 5, 8]
+  n_unlabeled: 10
+  trial_seconds: 2.0
+  min_test_per_class: 10
+  seed: 0
